@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispo-Generator – Clean Service Scaramuzzo AG</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root{
+    --teal:#4CABB1;
+    --teal-deep:#2C767C;
+    --teal-pale:#EAF5F5;
+    --ink:#141E24;
+    --ink-soft:#5B6B72;
+    --ink-faint:#8FA0A5;
+    --paper:#FFFFFF;
+    --bg:#F2F6F6;
+    --line:#E1E9E9;
+    --line-strong:#CCD9D9;
+    --warn:#96551F;
+    --warn-bg:#FBF1E5;
+    --danger:#A23A2E;
+    --danger-bg:#FBEAE8;
+    --ok:#2C7A50;
+    --radius:12px;
+    --radius-sm:8px;
+    --shadow:0 1px 2px rgba(20,30,36,.05), 0 8px 24px rgba(20,30,36,.06);
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:36px 22px 90px;}
+
+  header.top{
+    display:flex;align-items:center;gap:16px;margin-bottom:30px;
+    padding-bottom:22px; border-bottom:1px solid var(--line);
+  }
+  .logo-mark{
+    width:46px;height:46px;border-radius:11px;flex:none;
+    background:linear-gradient(155deg,var(--teal) 0%,var(--teal-deep) 100%);
+    display:flex;align-items:center;justify-content:center;color:#fff;
+    font-weight:700;font-size:16px;letter-spacing:-0.02em;
+    box-shadow:0 4px 14px rgba(44,118,124,.35);
+  }
+  h1{font-size:21px;margin:0;letter-spacing:-0.015em;font-weight:700;color:var(--ink);}
+  .sub{color:var(--ink-soft);font-size:13px;margin-top:3px;letter-spacing:.01em;}
+  header.top .tag{
+    margin-left:auto;font-size:11px;color:var(--teal-deep);background:var(--teal-pale);
+    padding:5px 11px;border-radius:20px;font-weight:600;letter-spacing:.02em;
+    border:1px solid rgba(44,118,124,.15); white-space:nowrap;
+  }
+
+  .card{
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+    padding:24px 26px;margin-bottom:18px;box-shadow:var(--shadow);
+  }
+  .card h2{
+    font-size:13px;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--teal-deep);font-weight:700; display:flex; align-items:center;
+  }
+  .card .desc{color:var(--ink-soft);font-size:13.5px;margin-bottom:18px;max-width:70ch;}
+  .step-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;
+    background:var(--ink);color:#fff;font-size:11px;font-weight:700;margin-right:10px;
+    font-family:var(--mono);
+  }
+
+  .drop{
+    border:1.5px dashed var(--line-strong);border-radius:var(--radius-sm);padding:16px 18px;
+    display:flex;align-items:center;gap:14px;cursor:pointer;
+    transition:border-color .15s, background .15s;
+    background:#FBFDFD;
+  }
+  .drop:hover, .drop.drag{border-color:var(--teal);background:var(--teal-pale);}
+  .drop input{display:none;}
+  .drop .icon{
+    width:38px;height:38px;flex:none;border-radius:var(--radius-sm);background:var(--teal-pale);
+    display:flex;align-items:center;justify-content:center;color:var(--teal-deep);
+  }
+  .drop .icon svg{width:18px;height:18px;}
+  .drop .txt strong{display:block;font-size:13.5px;color:var(--ink);}
+  .drop .txt span{color:var(--ink-soft);font-size:12px;}
+  .file-list{margin-top:10px;font-size:12.5px;color:var(--ink-soft);}
+  .file-list .f{
+    display:flex;align-items:center;gap:8px;
+    padding:6px 0;border-bottom:1px dotted var(--line);
+  }
+  .file-list .f span.name{flex:1;color:var(--ink);}
+  .file-list .f button{
+    border:none;background:none;color:var(--danger);cursor:pointer;font-size:12px;
+  }
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:760px){.two-col{grid-template-columns:1fr;}}
+
+  table.roster{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+  table.roster th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-faint);border-bottom:1px solid var(--line);padding:7px 8px;font-weight:700;
+  }
+  table.roster td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  table.roster input[type=text]{
+    width:100%;border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 9px;font-size:13px;
+    transition:border-color .15s;
+  }
+  table.roster input[type=text]:focus{outline:none;border-color:var(--teal);}
+  table.roster select{border:1px solid var(--line);border-radius:var(--radius-sm);padding:6px 7px;font-size:12.5px;}
+  .swatch{width:13px;height:13px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.08);}
+  .rowbtn{border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:15px;transition:color .15s;}
+  .rowbtn:hover{color:var(--danger);}
+  .add-row{
+    margin-top:12px;border:1px dashed var(--line-strong);background:none;color:var(--teal-deep);
+    padding:8px 15px;border-radius:var(--radius-sm);font-size:12.5px;cursor:pointer;font-weight:600;
+    transition:background .15s, border-color .15s;
+  }
+  .add-row:hover{background:var(--teal-pale);border-color:var(--teal);}
+
+  .capacity-banner{
+    display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+    background:var(--ink);color:#fff;border-radius:var(--radius);
+    padding:16px 22px;margin-bottom:18px;box-shadow:var(--shadow);
+  }
+  .capacity-banner .metric{display:flex;flex-direction:column;gap:1px;}
+  .capacity-banner .metric .val{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-0.01em;}
+  .capacity-banner .metric .lbl{font-size:10.5px;color:#A9C4C4;text-transform:uppercase;letter-spacing:.06em;}
+  .capacity-banner .divider{width:1px;align-self:stretch;background:rgba(255,255,255,.15);}
+  .capacity-banner .verdict{
+    margin-left:auto;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;
+  }
+  .capacity-banner .verdict.ok{background:rgba(76,171,177,.22);color:#BFEAEA;}
+  .capacity-banner .verdict.over{background:rgba(210,110,90,.25);color:#FFD3C6;}
+  .capacity-banner .bar-track{
+    flex:1 1 160px; min-width:140px; height:6px; border-radius:6px; background:rgba(255,255,255,.15); overflow:hidden;
+  }
+  .capacity-banner .bar-fill{height:100%; border-radius:6px; background:var(--teal); transition:width .3s;}
+  .capacity-banner .bar-fill.over{background:#D97757;}
+
+  .btn{
+    background:var(--teal);color:#fff;border:none;border-radius:var(--radius-sm);
+    padding:11px 20px;font-size:13.5px;font-weight:600;cursor:pointer;
+    transition:background .15s, transform .1s;
+    font-family:inherit;
+  }
+  .btn:hover{background:var(--teal-deep);}
+  .btn:active{transform:scale(.98);}
+  .btn:disabled{background:#C7D5D5;cursor:not-allowed;}
+  .btn.secondary{
+    background:#fff;color:var(--teal-deep);border:1px solid var(--teal);
+  }
+  .btn.secondary:hover{background:var(--teal-pale);}
+  .btn.ghost{background:none;color:var(--ink-soft);border:1px solid var(--line-strong);}
+  .btn.ghost:hover{background:#EEF3F3;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;}
+
+  .status{font-size:12.5px;color:var(--ink-soft);margin-top:10px;min-height:16px;}
+  .status.err{color:var(--danger);}
+  .status.ok{color:var(--ok);}
+
+  .warn-box{
+    background:var(--warn-bg);border:1px solid #EBD2AE;border-radius:var(--radius-sm);
+    padding:15px 17px;margin-bottom:18px;font-size:13px;color:var(--warn);
+  }
+  .warn-box h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+  .warn-box ul{margin:0;padding-left:18px;}
+  .warn-box li{margin-bottom:4px;}
+
+  .team-card{
+    border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);
+    margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow);
+    border-left:4px solid var(--card-accent, var(--teal));
+  }
+  .team-head{
+    display:flex;align-items:center;gap:10px;padding:14px 20px 10px;
+  }
+  .team-head .dot{width:10px;height:10px;border-radius:50%;flex:none;}
+  .team-head .name{font-weight:700;font-size:14.5px;flex:1;letter-spacing:-0.01em;}
+  .team-head .hours{font-size:12px;color:var(--ink-soft);font-family:var(--mono);}
+  .team-head .hours b{color:var(--ink);font-weight:600;}
+
+  .timeline{margin:0 20px 14px;}
+  .timeline .track{
+    position:relative;height:20px;background:var(--bg);border-radius:5px;
+    border:1px solid var(--line);overflow:hidden;
+  }
+  .timeline .seg{
+    position:absolute;top:0;bottom:0;border-radius:2px;opacity:.85;
+  }
+  .timeline .ticks{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink-faint);
+    margin-top:3px;font-family:var(--mono);}
+
+  table.jobs{width:100%;border-collapse:collapse;font-size:13px;}
+  table.jobs th{
+    text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-faint);padding:8px 20px;border-top:1px solid var(--line);font-weight:700;
+  }
+  table.jobs td{padding:10px 20px;border-top:1px solid var(--line);vertical-align:top;}
+  table.jobs tr:first-child td{border-top:1px solid var(--line);}
+  table.jobs .addr{font-weight:600;}
+  table.jobs .addr .plz{color:var(--ink-soft);font-weight:400;}
+  table.jobs .note{
+    font-size:11.5px;color:var(--warn);margin-top:4px;display:block;font-style:italic;
+  }
+  table.jobs .badge{
+    display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.03em;padding:2.5px 8px;border-radius:20px;margin-right:5px;margin-top:4px;
+  }
+  .badge.fix{background:#EADCF9;color:#6a3fb5;}
+  .badge.extra{background:#FCE1DD;color:#a6362b;}
+  .badge.missing{background:#FBE2E2;color:var(--danger);}
+  input.timefield{
+    border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px;width:60px;
+    font-family:var(--mono); text-align:center;
+  }
+  input.timefield:disabled{background:var(--bg);color:var(--ink-faint);border-color:var(--line);}
+  table.jobs select.reassign{
+    border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px;
+  }
+  .lock-toggle{
+    border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink-faint);
+  }
+  .lock-toggle.locked{color:var(--teal-deep);}
+
+  footer.note{
+    text-align:center;color:var(--ink-faint);font-size:11.5px;margin-top:34px;
+  }
+
+  @media print{
+    body{background:#fff;}
+    .card:not(.print-keep), .actions, header.top .sub, header.top .tag, .btn { display:none !important; }
+    .wrap{max-width:100%;padding:0;}
+    .team-card{break-inside:avoid;box-shadow:none;border:1px solid #999;border-left:4px solid var(--card-accent,#999);}
+    table.jobs input, table.jobs select{border:none;background:none;-webkit-appearance:none;}
+    .lock-toggle{display:none;}
+    .capacity-banner{background:#fff !important;color:#000 !important;border:1px solid #999;}
+    .capacity-banner .lbl{color:#555 !important;}
+  }
+  .print-title{display:none;}
+  @media print{
+    .print-title{display:block;font-size:18px;font-weight:700;margin-bottom:4px;}
+    .print-sub{display:block;color:#555;font-size:12px;margin-bottom:18px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo-mark">CS</div>
+    <div>
+      <h1>Dispo-Generator</h1>
+      <div class="sub">Clean Service Scaramuzzo AG · Putzfrauenservice – automatische Tagesdisposition</div>
+    </div>
+    <span class="tag">Läuft lokal im Browser</span>
+  </header>
+
+  <div class="print-title" id="printTitle"></div>
+  <div class="print-sub" id="printSub"></div>
+
+  <!-- STEP 1: Upload -->
+  <div class="card">
+    <h2><span class="step-num">1</span>Dateien hochladen</h2>
+    <div class="desc">Lade die "Disposition Aufträge nach Datum"-Datei sowie die zugehörigen Arbeitsrapporte (PDF) hoch. Beide Dateien werden lokal im Browser gelesen – nichts wird hochgeladen.</div>
+
+    <div class="two-col">
+      <div>
+        <label class="drop" id="dropList">
+          <input type="file" id="fileList" accept="application/pdf">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3h8l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h6M9 8h2"/></svg></div>
+          <div class="txt">
+            <strong>Disposition nach Datum</strong>
+            <span>1 PDF-Datei – Auftragsliste des Tages</span>
+          </div>
+        </label>
+        <div class="file-list" id="fileListInfo"></div>
+      </div>
+      <div>
+        <label class="drop" id="dropRapporte">
+          <input type="file" id="fileRapporte" accept="application/pdf" multiple>
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h10v18l-2.5-1.5L12 21l-2.5-1.5L7 21z"/><path d="M9.5 8h5M9.5 11.5h5M9.5 15h3"/></svg></div>
+          <div class="txt">
+            <strong>Arbeitsrapporte</strong>
+            <span>1 oder mehrere PDFs – Details je Auftrag</span>
+          </div>
+        </label>
+        <div class="file-list" id="fileRapporteInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Team -->
+  <div class="card">
+    <h2><span class="step-num">2</span>Team für diesen Tag</h2>
+    <div class="desc">Wer steht heute grundsätzlich zur Verfügung? Das Tool setzt nicht zwingend alle ein – es plant betriebswirtschaftlich sinnvoll und lastet lieber weniger Personen sauber aus, statt unnötig auf viele zu verteilen. Mitarbeiterinnen ohne Fahrzeug werden automatisch mit einer Fahrerin im selben Team eingeteilt.</div>
+    <table class="roster" id="rosterTable">
+      <thead>
+        <tr><th style="width:26px"></th><th>Name</th><th>Fahrzeug</th><th>Team mit (falls kein Fahrzeug)</th><th style="width:30px"></th></tr>
+      </thead>
+      <tbody id="rosterBody"></tbody>
+    </table>
+    <button class="add-row" id="addRosterRow">+ Mitarbeiterin hinzufügen</button>
+  </div>
+
+  <!-- STEP 3: Parse -->
+  <div class="card">
+    <h2><span class="step-num">3</span>Aufträge einlesen</h2>
+    <div class="desc">
+      Kriterium: Es zählen <b>Datum</b>, <b>Aufwand (Std.)</b> und spezielle Hinweise zur <b>Ausführungszeit</b> im Bemerkungsfeld.
+      Schlüsselnotizen und "Aktiv von–bis" werden ignoriert. Jede Mitarbeiterin arbeitet max. <b>8 Std./Tag</b> zwischen <b>08:00–17:00 Uhr</b>.
+      Angezeigte Fahrzeiten/Kilometer sind reine <b>interne Planungsinfo</b> und werden nicht verrechnet.
+    </div>
+    <div class="actions">
+      <button class="btn" id="parseBtn" disabled>Aufträge einlesen</button>
+      <button class="btn ghost" id="resetBtn">Zurücksetzen</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <!-- STEP 4: Review & manual adjustments -->
+  <div class="card" id="reviewCard" style="display:none;">
+    <h2><span class="step-num">4</span>Aufträge prüfen &amp; anpassen</h2>
+    <div class="desc">
+      Nicht jeder Rapport lässt sich zu 100% automatisch erkennen. Prüfe Kundenname, Adresse und Uhrzeit-Fenster – wo nichts Spezielles erkannt wurde, steht hier <b>08:00–17:00</b>.
+      Die Spalte <b>Std.</b> zeigt die erkannten Stunden. Braucht ein Kunde z.B. fix ab 10:00 Uhr und die Std.-Spalte zeigt 2 Std., trage <b>10:00–12:00</b> ein – das Tool erkennt automatisch, falls zwei Mitarbeiterinnen eingeteilt werden und sie dadurch schon um 11:00 Uhr fertig sind.
+    </div>
+    <div style="max-height:520px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius-sm);">
+      <table class="roster" id="reviewTable" style="margin-top:0;">
+        <thead>
+          <tr>
+            <th style="width:90px;">Auftrag-Nr.</th>
+            <th>Kundenname</th>
+            <th>Adresse</th>
+            <th style="width:60px;">Std.</th>
+            <th style="width:75px;">Von</th>
+            <th style="width:75px;">Bis</th>
+          </tr>
+        </thead>
+        <tbody id="reviewBody"></tbody>
+      </table>
+    </div>
+    <div id="extraInfoBox"></div>
+    <div id="absenceInfoBox"></div>
+
+    <div class="actions">
+      <button class="btn" id="generateBtn">Dispo erstellen</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results"></div>
+
+</div>
+
+
+<script>
+/* pdf.worker.min.js is loaded as a plain <script> tag above (not as a real Worker).
+   When pdf.js detects it's not running inside an actual Worker context, it registers
+   itself on globalThis.pdfjsWorker. pdf.js's PDFWorker then finds this automatically
+   (via the internal _mainThreadWorkerMessageHandler check) and runs fully in-process,
+   without ever attempting to spawn a Worker or fetch/blob anything at runtime.
+   This is the officially supported "no worker" mode and is the most reliable option
+   in sandboxed environments that block Worker/blob creation. */
+const pdfWorkerReady = Promise.resolve();
+
+/* ---------------------------------------------------------------
+   STATE
+--------------------------------------------------------------- */
+let listFile = null;          // {name, arrayBuffer}
+let rapportFiles = [];        // [{name, arrayBuffer}]
+let roster = [];              // [{id,name,vehicle,teamWith,color}]
+let lastResult = null;        // {teams, warnings, extras, targetDatum}
+let manualOverrides = {};     // auftragNr -> {teamId, von, bis, locked}
+
+const COLORS = ["#7B2D8E","#1565C0","#2E7D32","#E67E22","#C0392B","#0E7C7B","#8E5A2D","#5B6ABF"];
+let colorCursor = 0;
+function nextColor(){ const c = COLORS[colorCursor % COLORS.length]; colorCursor++; return c; }
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+/* default roster */
+function defaultRoster(){
+  colorCursor = 0;
+  const lina = {id:uid(), name:"Lina", vehicle:true, teamWith:null, color:nextColor()};
+  const itahisa = {id:uid(), name:"Itahisa", vehicle:true, teamWith:null, color:nextColor()};
+  const alba = {id:uid(), name:"Alba", vehicle:true, teamWith:null, color:nextColor()};
+  const marialaura = {id:uid(), name:"Maria Laura", vehicle:true, teamWith:null, color:nextColor()};
+  const ginett = {id:uid(), name:"Ginett", vehicle:false, teamWith:marialaura.id, color:marialaura.color};
+  return [lina, itahisa, alba, marialaura, ginett];
+}
+roster = defaultRoster();
+
+/* ---------------------------------------------------------------
+   ROSTER UI
+--------------------------------------------------------------- */
+function renderRoster(){
+  const body = document.getElementById('rosterBody');
+  body.innerHTML = '';
+  roster.forEach(r=>{
+    const tr = document.createElement('tr');
+
+    const tdSw = document.createElement('td');
+    const sw = document.createElement('span'); sw.className='swatch'; sw.style.background = r.vehicle ? r.color : (roster.find(x=>x.id===r.teamWith)?.color || r.color);
+    tdSw.appendChild(sw);
+
+    const tdName = document.createElement('td');
+    const inName = document.createElement('input'); inName.type='text'; inName.value=r.name;
+    inName.oninput = ()=>{ r.name = inName.value; updateGenerateState(); };
+    tdName.appendChild(inName);
+
+    const tdVeh = document.createElement('td');
+    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked=r.vehicle;
+    cb.onchange = ()=>{ r.vehicle = cb.checked; if(r.vehicle){ r.teamWith=null; if(!r.color||COLORS.every(c=>c!==r.color)) r.color=nextColor(); } renderRoster(); };
+    tdVeh.appendChild(cb);
+
+    const tdTeam = document.createElement('td');
+    if(!r.vehicle){
+      const sel = document.createElement('select');
+      const optNone = document.createElement('option'); optNone.value=''; optNone.textContent='— wählen —';
+      sel.appendChild(optNone);
+      roster.filter(x=>x.vehicle && x.id!==r.id).forEach(v=>{
+        const o = document.createElement('option'); o.value=v.id; o.textContent=v.name;
+        if(r.teamWith===v.id) o.selected=true;
+        sel.appendChild(o);
+      });
+      sel.onchange = ()=>{ r.teamWith = sel.value || null; renderRoster(); };
+      tdTeam.appendChild(sel);
+    } else {
+      tdTeam.innerHTML = '<span style="color:var(--ink-soft);font-size:12px;">—</span>';
+    }
+
+    const tdDel = document.createElement('td');
+    const delBtn = document.createElement('button'); delBtn.className='rowbtn'; delBtn.innerHTML='✕';
+    delBtn.onclick = ()=>{ roster = roster.filter(x=>x.id!==r.id); roster.forEach(x=>{ if(x.teamWith===r.id) x.teamWith=null; }); renderRoster(); };
+    tdDel.appendChild(delBtn);
+
+    tr.append(tdSw, tdName, tdVeh, tdTeam, tdDel);
+    body.appendChild(tr);
+  });
+}
+document.getElementById('addRosterRow').onclick = ()=>{
+  roster.push({id:uid(), name:"Neue Mitarbeiterin", vehicle:true, teamWith:null, color:nextColor()});
+  renderRoster();
+};
+renderRoster();
+
+/* ---------------------------------------------------------------
+   FILE UPLOAD UI
+--------------------------------------------------------------- */
+function fileToArrayBuffer(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>res(r.result);
+    r.onerror = rej;
+    r.readAsArrayBuffer(file);
+  });
+}
+
+document.getElementById('fileList').addEventListener('change', async (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  listFile = { name:f.name, buf: await fileToArrayBuffer(f) };
+  renderFileInfo('fileListInfo', [listFile], (i)=>{ listFile=null; renderFileInfo('fileListInfo',[],()=>{}); updateGenerateState(); });
+  updateGenerateState();
+});
+
+document.getElementById('fileRapporte').addEventListener('change', async (e)=>{
+  const files = Array.from(e.target.files);
+  for(const f of files){
+    rapportFiles.push({ name:f.name, buf: await fileToArrayBuffer(f) });
+  }
+  renderRapporteInfo();
+  updateGenerateState();
+});
+
+function renderFileInfo(elId, files, onRemove){
+  const el = document.getElementById(elId);
+  el.innerHTML='';
+  files.forEach((f,i)=>{
+    const div = document.createElement('div'); div.className='f';
+    div.innerHTML = `<span class="name">📄 ${f.name}</span>`;
+    const btn = document.createElement('button'); btn.textContent='entfernen';
+    btn.onclick = ()=>onRemove(i);
+    div.appendChild(btn);
+    el.appendChild(div);
+  });
+}
+function renderRapporteInfo(){
+  renderFileInfo('fileRapporteInfo', rapportFiles, (i)=>{ rapportFiles.splice(i,1); renderRapporteInfo(); updateGenerateState(); });
+}
+
+function updateGenerateState(){
+  document.getElementById('parseBtn').disabled = !(listFile && rapportFiles.length>0);
+}
+
+document.getElementById('resetBtn').onclick = ()=>{
+  listFile=null; rapportFiles=[]; manualOverrides={}; lastResult=null;
+  mergedForReview=null; reviewEdits={}; finalizedOrders=null; extraOrders=[]; absenceOrders=[];
+  document.getElementById('fileList').value='';
+  document.getElementById('fileRapporte').value='';
+  renderFileInfo('fileListInfo',[],()=>{});
+  renderRapporteInfo();
+  document.getElementById('reviewCard').style.display='none';
+  document.getElementById('reviewBody').innerHTML='';
+  document.getElementById('extraInfoBox').innerHTML='';
+  document.getElementById('absenceInfoBox').innerHTML='';
+  document.getElementById('results').innerHTML='';
+  document.getElementById('status').textContent='';
+  updateGenerateState();
+};
+
+/* ---------------------------------------------------------------
+   PDF TEXT HELPERS
+--------------------------------------------------------------- */
+async function loadPdf(buf){
+  return pdfjsLib.getDocument({ data: buf }).promise;
+}
+function groupLines(items){
+  const buckets = {};
+  for(const it of items){
+    const key = Math.round(it.y/2)*2;
+    (buckets[key] ||= []).push(it);
+  }
+  const ys = Object.keys(buckets).map(Number).sort((a,b)=>b-a);
+  return ys.map(y=> buckets[y].sort((a,b)=>a.x-b.x).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim() ).filter(t=>t.length>0);
+}
+
+/* ---------------------------------------------------------------
+   PARSE: Disposition nach Datum (master list)
+--------------------------------------------------------------- */
+const MONTH_MAP = {Januar:1,Februar:2,"März":3,April:4,Mai:5,Juni:6,Juli:7,August:8,September:9,Oktober:10,November:11,Dezember:12};
+
+function classifyListColumn(x){
+  if(x < 80) return 0;
+  if(x < 295) return 1;
+  if(x < 405) return 2;
+  return 3;
+}
+
+async function parseDispoListPdf(buf){
+  const doc = await loadPdf(buf);
+  let targetDatum = null;
+  const rows = [];
+  for(let p=1;p<=doc.numPages;p++){
+    const page = await doc.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5]})).filter(i=>i.str.trim());
+    if(!targetDatum){
+      const fullText = items.slice().sort((a,b)=> b.y-a.y || a.x-b.x).map(i=>i.str).join('\n');
+      const hm = fullText.match(/(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag),\s*(\d{1,2})\.\s*(\w+)\s*(\d{4})/);
+      if(hm){
+        const day = hm[2].padStart(2,'0');
+        const month = String(MONTH_MAP[hm[3]]||0).padStart(2,'0');
+        targetDatum = `${day}.${month}.${hm[4]}`;
+      }
+    }
+    const buckets = {};
+    for(const it of items){ const key = Math.round(it.y/2)*2; (buckets[key] ||= []).push(it); }
+    const lineYs = Object.keys(buckets).map(Number).sort((a,b)=>b-a);
+    for(const y of lineYs){
+      const rowItems = buckets[y].sort((a,b)=>a.x-b.x);
+      if(!/^\d{6,8}$/.test(rowItems[0].str.trim())) continue;
+      const cols = [[],[],[],[]];
+      for(const it of rowItems) cols[classifyListColumn(it.x)].push(it.str);
+      rows.push({
+        auftragNr: cols[0].join(' ').trim(),
+        address: cols[1].join(' ').trim(),
+        typ: cols[2].join(' ').trim(),
+        page: p-1,
+        y: y,
+        preAssigned: (()=>{
+          const raw = cols[3].join(' ').trim().replace(/^-\s*/, '').trim();
+          return (raw.length===0 || /^_+$/.test(raw)) ? null : raw;
+        })()
+      });
+    }
+  }
+  return { targetDatum, rows };
+}
+
+/* ---------------------------------------------------------------
+   PARSE: Arbeitsrapporte
+--------------------------------------------------------------- */
+async function parseRapportPdf(buf){
+  const doc = await loadPdf(buf);
+  const orders = [];
+  for(let p=1;p<=doc.numPages;p++){
+    const page = await doc.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items.map(it=>({str:it.str,x:it.transform[4],y:it.transform[5]})).filter(i=>i.str.trim());
+    const leftItems = items.filter(i=>i.x<300);
+    const rightItems = items.filter(i=>i.x>=300);
+    const leftText = groupLines(leftItems).join('\n');
+    const rightText = groupLines(rightItems).join('\n');
+
+    const titleMatch = leftText.match(/^(.*?)\s*-\s*Auftrag\s*-\s*Nr\.\s*(\d+)/m);
+    if(!titleMatch) continue;
+
+    // The "Datum + X.XX Std." line is the ONE field every Rapport variant always has
+    // (Ferienvertretung, Einführung PFS, etc. often lack "Ausführungszeit:"/"Aufwand:" entirely).
+    // A page without this line is the signature/table page (page 2), not real data - skip it.
+    const dateStdMatches = [...leftText.matchAll(/(\d{2}\.\d{2}\.\d{4})\s+([\d.,]+)\s*Std\./g)];
+    if(dateStdMatches.length===0) continue;
+
+    const bezeichnung = titleMatch[1].trim();
+    const auftragNr = titleMatch[2];
+
+    const aufwandMatch = rightText.match(/Aufwand:\s*([\d.,]+)\s*Std/i);
+    const aufwandGeneric = aufwandMatch ? parseFloat(aufwandMatch[1].replace(',','.')) : null;
+
+    const zeitMatch = rightText.match(/Ausführungszeit:\s*([\d:]+)\s*-\s*([\d:]+)\s*Uhr/);
+    let zeit = zeitMatch ? {von:zeitMatch[1], bis:zeitMatch[2]} : null;
+
+    const aktivMatch = rightText.match(/Aktiv:\s*([\d.]+)\s*-\s*([\d.]+)/);
+    const aktiv = aktivMatch ? `${aktivMatch[1]} - ${aktivMatch[2]}` : null;
+
+    // Cleaning-object address (left column, right under the title) is the address that
+    // matters for routing. The "Kunde" address (right column) is often the billing
+    // contact and can be a different physical location - never use it for the route.
+    let street=null, plzOrt=null;
+    const afterTitleIdx = titleMatch.index + titleMatch[0].length;
+    const adresseObjektIdx = leftText.indexOf('Adresse (Objekt', afterTitleIdx);
+    const headerBlock = leftText.slice(afterTitleIdx, adresseObjektIdx>-1 ? adresseObjektIdx : afterTitleIdx+250).trim();
+    const headerLines = headerBlock.split('\n').map(l=>l.trim()).filter(Boolean);
+    for(let i=headerLines.length-1;i>=0;i--){
+      if(/^\d{4}\s+\S/.test(headerLines[i])){ plzOrt = headerLines[i]; street = headerLines.slice(0,i).join(', '); break; }
+    }
+    // fallback to the "Kunde" address only if the object address couldn't be found at all
+    if(!plzOrt){
+      const rLines = rightText.split('\n');
+      for(let i=1;i<rLines.length;i++){
+        if(/^\d{4}\s+\S/.test(rLines[i])){ plzOrt = rLines[i].trim(); street = rLines[i-1].trim(); break; }
+      }
+    }
+
+    // Customer display name (for the manual review dashboard) - the lines under the
+    // "Kunde" heading, up to the address/phone/email that follows it.
+    let customerName = null;
+    {
+      const rLines2 = rightText.split('\n');
+      const kundeIdx = rLines2.findIndex(l => l.trim()==='Kunde' || /\bKunde\b/.test(l));
+      if(kundeIdx > -1){
+        const nameLines = [];
+        for(let i=kundeIdx+1; i<rLines2.length; i++){
+          const l = rLines2[i].trim();
+          if(!l) continue;
+          if(/^\d{4}\s+\S/.test(l)) break;
+          if(/^(Telefon|Mobiltelefon|Mobile)/i.test(l)) break;
+          if(/@/.test(l)) break;
+          if(/\d+\s*$/.test(l)) break; // street line ending in a house number
+          nameLines.push(l);
+        }
+        customerName = nameLines.join(' ').replace(/\s+/g,' ').trim() || null;
+      }
+    }
+
+    const dateStdPairs = dateStdMatches.map(m => ({ datum: m[1], std: parseFloat(m[2].replace(',','.')) }));
+    const dispoDatum = dateStdPairs.length ? dateStdPairs[0].datum : null;
+    const aufwandFromDateLine = dateStdPairs.length ? dateStdPairs[0].std : null;
+    const aufwand = aufwandFromDateLine != null ? aufwandFromDateLine : aufwandGeneric;
+
+    const notesMatch = leftText.match(/Aufgaben\s*-\s*[^\n]*\n([\s\S]*?)\n\d{2}\.\d{2}\.\d{4},\s*Clean Service/);
+    let notes = notesMatch ? notesMatch[1].trim().replace(/\n+/g,' ') : '';
+
+    // Some order types (e.g. "Einführung PFS") have no structured Ausführungszeit field at
+    // all - the fixed appointment time and required employee are only mentioned in the
+    // notes, e.g. "Einführung um 08.00 Uhr mit Liliana (fix)". Pull that out explicitly.
+    // Swiss usage is 24h format ("14.30 Uhr" = 14:30), but notes occasionally spell it out
+    // colloquially ("2 Uhr nachmittags" = 14:00) - normalise that to 24h too.
+    let introAppointment = null;
+    const introMatch = notes.match(/um\s+(\d{1,2})[.:](\d{2})\s*(?:Uhr)?\s*(nachmittags|abends|morgens|vormittags)?\s*mit\s+([^(]+?)\s*\((fix|nicht fix)\)/i);
+    if(introMatch){
+      let hourNum = parseInt(introMatch[1], 10);
+      const qualifier = (introMatch[3]||'').toLowerCase();
+      if((qualifier==='nachmittags' || qualifier==='abends') && hourNum>=1 && hourNum<=7){
+        hourNum += 12; // "2 Uhr nachmittags" -> 14:00, not 02:00
+      }
+      const hh = String(hourNum).padStart(2,'0');
+      const mm = introMatch[2];
+      introAppointment = { time: `${hh}:${mm}`, name: introMatch[4].trim(), fix: introMatch[5].toLowerCase()==='fix' };
+      if(!zeit && introAppointment.fix){
+        zeit = { von: introAppointment.time, bis: minToTime(timeToMin(introAppointment.time) + Math.max(15, Math.round((aufwand||0.25)*60))) };
+      }
+    }
+
+    orders.push({auftragNr, bezeichnung, street, plzOrt, customerName, aufwand, dateStdPairs, zeit, dispoDatum, aktiv, notes, introAppointment});
+  }
+  return orders;
+}
+
+/* ---------------------------------------------------------------
+   LOCALITIES - full Swiss postal-code coordinate database
+   Earlier versions only had a hand-picked list of ~28 towns; any other
+   postal code silently fell back to a crude numeric-gap guess with no
+   connection to real geography (this is what caused e.g. "8542
+   Wiesendangen" and "8400 Winterthur" - genuinely 5km apart - to be
+   treated as unrelated and routed on completely different tours).
+   PLZ_COORDS now covers essentially all ~3400 Swiss postal codes with
+   real coordinates (averaged per postal code from official Swiss Post
+   address/geocoding data), so this class of error should no longer
+   happen regardless of which town appears in a Rapport.
+--------------------------------------------------------------- */
+const PLZ_COORDS={3000:[46.9472,7.4512],3001:[46.9476,7.4404],3002:[46.9608,7.454],3003:[46.8456,7.5505],3004:[46.9725,7.4471],3005:[46.9404,7.4489],3006:[46.9462,7.471],3007:[46.9363,7.4361],3008:[46.9426,7.4143],3010:[46.9477,7.4248],3011:[46.9492,7.4439],3012:[46.9589,7.4273],3013:[46.9551,7.4469],3014:[46.964,7.461],3015:[46.9392,7.4854],3018:[46.9398,7.3815],3019:[46.9337,7.3459],3020:[46.9509,7.3377],3024:[46.7951,7.6036],3027:[46.9487,7.3778],3029:[46.7951,7.6036],3030:[46.7951,7.6036],3032:[46.9651,7.3805],3033:[46.9738,7.3444],3034:[46.9817,7.3147],3035:[46.9944,7.2927],3036:[46.9946,7.2652],3037:[46.9754,7.4233],3038:[47.0013,7.4123],3039:[46.7951,7.6036],3040:[46.7951,7.6036],3041:[46.7951,7.6036],3042:[46.9904,7.4009],3043:[46.9886,7.3681],3044:[46.9962,7.3064],3045:[47.0088,7.3756],3046:[47.004,7.3366],3047:[46.976,7.4369],3048:[46.9773,7.4652],3049:[46.992,7.336],3050:[46.7951,7.6036],3052:[46.9903,7.4551],3053:[47.0257,7.4484],3054:[47.0348,7.3686],3063:[46.9771,7.4768],3065:[46.9821,7.5096],3066:[46.9609,7.5233],3067:[46.9613,7.547],3068:[46.9626,7.5767],3071:[46.9622,7.4796],3072:[47.1133,8.0646],3073:[46.936,7.5015],3074:[46.9297,7.4867],3075:[46.9229,7.5441],3076:[46.9382,7.5637],3077:[46.9321,7.5969],3078:[46.9179,7.5822],3082:[46.9136,7.6106],3083:[46.9042,7.5772],3084:[46.9214,7.4474],3085:[47.5441,9.146],3086:[46.8922,7.4615],3087:[46.8614,7.4654],3088:[46.8342,7.4578],3089:[46.8381,7.4128],3095:[46.9254,7.4347],3096:[46.8738,7.403],3097:[46.9314,7.4187],3098:[46.9105,7.4149],3099:[46.7817,7.4544],3110:[46.8747,7.5628],3111:[46.8756,7.5854],3112:[46.9163,7.519],3113:[46.9045,7.55],3114:[46.8497,7.576],3115:[46.8389,7.5445],3116:[46.8191,7.543],3122:[46.9104,7.4711],3123:[46.8953,7.5046],3124:[46.8686,7.5215],3125:[46.8589,7.491],3126:[46.8397,7.5077],3127:[46.8104,7.5085],3128:[46.8255,7.5001],3132:[46.821,7.4782],3144:[46.9,7.3941],3145:[46.886,7.3898],3147:[46.8765,7.3681],3148:[46.8499,7.3551],3150:[46.8129,7.3316],3152:[46.8095,7.3792],3153:[46.7768,7.3808],3154:[46.7951,7.4078],3155:[46.8108,7.419],3156:[46.7657,7.3526],3157:[46.7934,7.3595],3158:[46.7586,7.32],3159:[46.784,7.3196],3172:[46.9181,7.3799],3173:[46.9094,7.3638],3174:[46.895,7.351],3175:[46.8893,7.3101],3176:[46.9055,7.2886],3177:[46.9036,7.2387],3178:[46.888,7.229],3179:[46.9112,7.2187],3182:[46.8648,7.3117],3183:[46.846,7.3248],3184:[46.8711,7.2757],3185:[46.8531,7.2408],3186:[46.8433,7.1962],3202:[46.9527,7.3178],3203:[46.9622,7.2723],3204:[46.9267,7.2672],3205:[46.9455,7.2605],3206:[46.9354,7.224],3207:[46.9782,7.2416],3208:[46.9646,7.2139],3210:[46.9749,7.1954],3212:[46.8841,7.1723],3213:[46.9003,7.1989],3214:[46.9326,7.201],3215:[46.9399,7.1825],3216:[46.9553,7.1894],3225:[46.9955,7.1461],3226:[47.0101,7.1594],3232:[46.9986,7.1093],3233:[47.0259,7.0782],3234:[47.0345,7.1212],3235:[47.05,7.1141],3236:[47.0147,7.0579],3237:[47.0219,7.1479],3238:[47.0274,7.044],3250:[47.0805,7.3177],3251:[47.0866,7.4048],3252:[47.098,7.2904],3253:[47.111,7.3908],3254:[47.0969,7.4386],3255:[47.0679,7.4121],3256:[47.0504,7.4288],3257:[47.0703,7.3567],3262:[47.0566,7.3406],3263:[47.106,7.3403],3264:[47.1079,7.3618],3266:[47.0514,7.3191],3267:[47.0298,7.3195],3268:[47.0182,7.2987],3270:[47.0462,7.2865],3271:[47.018,7.2665],3272:[47.0647,7.2231],3273:[47.0711,7.2715],3274:[47.0829,7.2462],3280:[46.9236,7.1146],3282:[47.0385,7.2631],3283:[47.0145,7.2324],3284:[46.9979,7.2082],3285:[46.9573,7.1457],3286:[46.9444,7.138],3292:[47.0994,7.3211],3293:[47.1228,7.3493],3294:[47.1415,7.3608],3295:[47.1532,7.4103],3296:[47.1674,7.4281],3297:[47.1753,7.4601],3298:[47.1357,7.4146],3302:[47.0146,7.4846],3303:[47.0471,7.4931],3305:[47.0663,7.4677],3306:[47.0842,7.4787],3307:[47.0866,7.4681],3308:[47.0787,7.5107],3309:[47.0733,7.5459],3312:[47.0889,7.5323],3313:[47.0958,7.5138],3314:[47.1091,7.5261],3315:[47.144,7.5328],3317:[47.1048,7.4857],3321:[46.6519,7.5717],3322:[47.0253,7.5067],3323:[47.019,7.5277],3324:[47.0476,7.5544],3325:[47.0322,7.5642],3326:[47.0051,7.5675],3360:[47.1895,7.7078],3362:[47.1858,7.6943],3363:[47.1794,7.6944],3365:[47.1439,7.6651],3366:[47.1702,7.7127],3367:[47.1682,7.7351],3368:[47.1853,7.7569],3372:[47.2002,7.693],3373:[47.2077,7.6909],3374:[47.2186,7.6567],3375:[47.2019,7.6692],3376:[47.2245,7.7173],3377:[47.2282,7.6853],3380:[47.2346,7.6594],3400:[47.0559,7.6272],3401:[47.1349,7.7682],3412:[47.0454,7.6592],3413:[47.0768,7.6722],3414:[47.0393,7.6257],3415:[47.0116,7.6539],3416:[47.066,7.7275],3417:[47.0307,7.6705],3418:[47.0341,7.6892],3419:[46.9928,7.616],3421:[47.0657,7.5836],3422:[47.0842,7.5867],3423:[47.0985,7.6002],3424:[47.1127,7.6123],3425:[47.1344,7.6092],3426:[47.0955,7.5576],3427:[47.1312,7.5553],3428:[47.1533,7.5583],3429:[47.1442,7.6407],3432:[47.008,7.6928],3433:[46.9867,7.6942],3434:[46.9594,7.6765],3435:[46.997,7.7108],3436:[46.9695,7.7553],3437:[46.9884,7.7182],3438:[46.9588,7.722],3439:[46.9872,7.7395],3452:[47.0078,7.7236],3453:[47.0134,7.7641],3454:[47.0363,7.7417],3455:[47.0253,7.7422],3456:[47.0147,7.7446],3457:[47.0412,7.791],3462:[47.0615,7.7589],3463:[47.0818,7.7542],3464:[47.0934,7.7473],3465:[47.0813,7.791],3472:[47.1021,7.6607],3473:[47.1241,7.6439],3474:[47.1137,7.71],3475:[47.1476,7.6969],3476:[47.1316,7.7216],3503:[46.8951,7.5931],3504:[46.8786,7.6483],3506:[46.9082,7.6428],3507:[46.9285,7.6284],3508:[46.934,7.6538],3510:[46.871,7.6146],3512:[46.9451,7.6062],3513:[46.967,7.625],3531:[46.9221,7.6884],3532:[46.8987,7.6544],3533:[46.899,7.6897],3534:[46.9073,7.7264],3535:[46.9237,7.7399],3536:[46.9062,7.7786],3537:[46.8603,7.8073],3538:[46.8599,7.7423],3543:[46.9461,7.7236],3550:[46.9428,7.7711],3551:[46.9585,7.7881],3552:[46.933,7.8111],3553:[46.9546,7.8071],3555:[46.9231,7.8445],3556:[46.9524,7.874],3557:[46.9836,7.9303],3600:[46.7535,7.6224],3602:[46.7606,7.6153],3603:[46.7611,7.5996],3604:[46.7607,7.6284],3607:[46.8195,7.76],3608:[46.7407,7.5956],3609:[46.8195,7.76],3612:[46.7808,7.6341],3613:[46.7734,7.616],3614:[46.7952,7.6895],3615:[46.8285,7.6957],3616:[46.7941,7.7207],3617:[46.7971,7.6696],3618:[46.8189,7.7478],3619:[46.788,7.7715],3622:[46.7761,7.6843],3623:[46.778,7.7259],3624:[46.7701,7.665],3625:[46.7497,7.6796],3626:[46.7456,7.6442],3627:[46.7937,7.6039],3628:[46.7944,7.5737],3629:[46.8195,7.5837],3631:[46.7231,7.5675],3632:[46.7141,7.5634],3633:[46.728,7.5839],3634:[46.7544,7.5729],3635:[46.7381,7.555],3636:[46.76,7.5246],3638:[46.7322,7.5306],3645:[46.7167,7.6211],3646:[46.7092,7.6452],3647:[46.6943,7.6202],3652:[46.7409,7.666],3653:[46.7353,7.6762],3654:[46.7211,7.6885],3655:[46.7245,7.729],3656:[46.7307,7.693],3657:[46.7462,7.7237],3658:[46.6957,7.7515],3661:[46.7743,7.5716],3662:[46.7883,7.5379],3663:[46.7798,7.5337],3664:[46.7911,7.5005],3665:[46.7699,7.5098],3671:[46.8228,7.6116],3672:[46.8385,7.6304],3673:[46.8483,7.6969],3674:[46.8157,7.6391],3700:[46.6902,7.6611],3702:[46.6724,7.6806],3703:[46.6306,7.7413],3704:[46.6561,7.7339],3705:[46.6706,7.6997],3706:[46.6435,7.7773],3707:[46.6506,7.8145],3711:[46.6422,7.684],3713:[46.6175,7.6813],3714:[46.5992,7.6424],3715:[46.4988,7.5748],3716:[46.5515,7.6662],3717:[46.5236,7.6713],3718:[46.4947,7.6744],3722:[46.6151,7.698],3723:[46.5455,7.7589],3724:[46.561,7.6061],3725:[46.5231,7.622],3752:[46.6761,7.6386],3753:[46.6599,7.579],3754:[46.646,7.5644],3755:[46.6322,7.5611],3756:[46.6071,7.5158],3757:[46.5738,7.4873],3758:[46.6644,7.5767],3762:[46.6619,7.5339],3763:[46.6715,7.5041],3764:[46.6584,7.4754],3765:[46.6571,7.4368],3766:[46.6139,7.3794],3770:[46.5753,7.3927],3771:[46.5414,7.3881],3772:[46.5,7.3837],3773:[46.4986,7.4195],3775:[46.4632,7.4408],3776:[46.5307,7.3434],3777:[46.5151,7.3054],3778:[46.522,7.2678],3780:[46.4796,7.2868],3781:[46.4783,7.3312],3782:[46.3772,7.3403],3783:[46.4444,7.2711],3784:[46.4122,7.2456],3785:[46.3728,7.2586],3792:[46.4561,7.2395],3800:[46.6758,7.8592],3801:[46.5472,7.9832],3803:[46.719,7.8097],3804:[46.7272,7.8649],3805:[46.7025,7.8728],3806:[46.6816,7.9288],3807:[46.6966,7.9919],3812:[46.6652,7.8689],3813:[46.6364,7.8312],3814:[46.66,7.8726],3815:[46.6314,7.9072],3816:[46.6371,7.9532],3818:[46.6241,8.0172],3822:[46.6081,7.9021],3823:[46.5828,7.947],3824:[46.5425,7.9043],3825:[46.5594,7.8926],3826:[46.5465,7.89],3852:[46.7126,7.9021],3853:[46.7231,7.9257],3854:[46.7571,7.9617],3855:[46.7494,8.0306],3856:[46.7516,8.1007],3857:[46.7397,8.1185],3858:[46.7514,8.0817],3860:[46.7162,8.2],3862:[46.7052,8.2274],3863:[46.7207,8.3177],3864:[46.5754,8.0906],3900:[46.2942,7.9974],3901:[46.2798,8.0677],3902:[46.3103,7.9772],3903:[46.3163,7.9493],3904:[46.3409,7.9846],3905:[46.0718,7.957],3906:[46.1091,7.9297],3907:[46.2037,8.0878],3908:[46.1451,7.9293],3910:[46.1229,7.9366],3911:[46.3071,8.0229],3912:[46.3347,8.0424],3913:[46.3041,8.0443],3914:[46.3653,7.9793],3916:[46.394,7.7595],3917:[46.3842,7.7635],3918:[46.4022,7.7828],3919:[46.4222,7.8238],3920:[45.9986,7.7479],3922:[46.2211,7.8696],3923:[46.2434,7.8307],3924:[46.1763,7.8047],3925:[46.1966,7.8398],3926:[46.2182,7.8305],3927:[46.142,7.7923],3928:[46.1011,7.784],3929:[46.068,7.7759],3930:[46.2944,7.8956],3931:[46.2987,7.9012],3932:[46.2601,7.903],3933:[46.2277,7.8936],3934:[46.2733,7.8667],3935:[46.2799,7.8221],3937:[46.308,7.8637],3938:[46.3144,7.8507],3939:[46.3071,7.881],3940:[46.3151,7.7484],3942:[46.3118,7.8008],3943:[46.2933,7.7806],3944:[46.2849,7.7992],3945:[46.3166,7.7179],3946:[46.2568,7.7055],3947:[46.293,7.7137],3948:[46.2866,7.6961],3949:[46.334,7.7743],3951:[46.2959,7.6667],3952:[46.3092,7.6398],3953:[46.3261,7.6196],3954:[46.38,7.6288],3955:[46.3418,7.6331],3956:[46.3217,7.6711],3957:[46.3213,7.6991],3960:[46.2837,7.5338],3961:[46.2003,7.5896],3963:[46.3058,7.4915],3965:[46.2795,7.5419],3966:[46.2646,7.5146],3967:[46.2443,7.5304],3968:[46.3045,7.539],3970:[46.3118,7.5705],3971:[46.2805,7.4797],3972:[46.3134,7.5448],3973:[46.3029,7.5231],3974:[46.3132,7.5197],3975:[46.308,7.4969],3976:[46.2795,7.5014],3977:[46.2585,7.4634],3978:[46.2695,7.4528],3979:[46.2498,7.4723],3982:[46.34,8.0179],3983:[46.3612,8.0517],3984:[46.4191,8.1236],3985:[46.4911,8.2719],3986:[46.3579,8.0322],3987:[46.3766,8.0257],3988:[46.5102,8.3147],3989:[46.4458,8.2066],3991:[46.3786,8.0695],3992:[46.4199,8.0666],3993:[46.3753,8.0971],3994:[46.3873,8.1102],3995:[46.396,8.1688],3996:[46.3638,8.1842],3997:[46.4199,8.1549],3998:[46.4593,8.2599],3999:[46.5512,8.3605],4000:[47.4978,7.5962],4001:[47.5569,7.5888],4002:[47.5465,7.5933],4005:[47.5622,7.595],4007:[47.5687,7.5897],4009:[47.5575,7.5744],4010:[47.5515,7.5921],4012:[47.563,7.5722],4013:[47.5705,7.5737],4015:[47.5463,7.5644],4016:[47.4978,7.5962],4018:[47.4978,7.5962],4019:[47.5812,7.5938],4020:[47.5494,7.6072],4023:[47.5339,7.6091],4030:[47.5995,7.5314],4031:[47.5615,7.5818],4039:[47.4978,7.5962],4040:[47.4978,7.5962],4041:[47.4978,7.5962],4042:[47.4978,7.5962],4051:[47.5537,7.5861],4052:[47.5484,7.6102],4053:[47.5406,7.5976],4054:[47.5512,7.5689],4055:[47.5613,7.5656],4056:[47.5706,7.5741],4057:[47.5743,7.5931],4058:[47.5656,7.6118],4059:[47.5298,7.5932],4070:[47.4978,7.5962],4075:[47.4978,7.5962],4078:[47.4978,7.5962],4089:[47.4978,7.5962],4091:[47.4978,7.5962],4101:[47.5284,7.5812],4102:[47.5392,7.572],4103:[47.5234,7.5723],4104:[47.516,7.5582],4105:[47.5063,7.5255],4106:[47.4991,7.5533],4107:[47.4819,7.5449],4108:[47.486,7.5226],4112:[47.4873,7.5043],4114:[47.4733,7.5152],4115:[47.47,7.4866],4116:[47.4658,7.4649],4117:[47.4576,7.4387],4118:[47.4804,7.4566],4123:[47.5546,7.5448],4124:[47.5372,7.502],4125:[47.5793,7.651],4126:[47.5716,7.6728],4127:[47.5517,7.6272],4132:[47.5304,7.6411],4133:[47.5244,7.6831],4142:[47.5199,7.6139],4143:[47.479,7.617],4144:[47.4996,7.6192],4145:[47.4755,7.6588],4146:[47.4575,7.6432],4147:[47.4658,7.6012],4148:[47.4586,7.59],4153:[47.4962,7.5912],4202:[47.4527,7.605],4203:[47.441,7.5905],4204:[47.4222,7.5981],4206:[47.4251,7.646],4207:[47.3979,7.6528],4208:[47.398,7.6146],4222:[47.4356,7.5262],4223:[47.4502,7.5188],4224:[47.4476,7.5619],4225:[47.4188,7.5428],4226:[47.4078,7.5439],4227:[47.3914,7.54],4228:[47.3732,7.5412],4229:[47.3598,7.5926],4232:[47.3965,7.5792],4233:[47.3881,7.5895],4234:[47.3923,7.604],4242:[47.4204,7.5005],4243:[47.4408,7.4975],4244:[47.4248,7.4759],4245:[47.4231,7.4262],4246:[47.395,7.5065],4247:[47.3817,7.5018],4252:[47.386,7.4728],4253:[47.3899,7.4336],4254:[47.4082,7.4175],4302:[47.5339,7.7214],4303:[47.5364,7.7288],4304:[47.5232,7.745],4305:[47.5207,7.7832],4310:[47.5527,7.7935],4312:[47.5221,7.8165],4313:[47.5633,7.8419],4314:[47.5433,7.8721],4315:[47.5259,7.9003],4316:[47.5099,7.9242],4317:[47.5001,7.934],4322:[47.5461,7.9196],4323:[47.5591,7.9042],4324:[47.53,7.9363],4325:[47.5135,7.9654],4332:[47.5449,7.9526],4333:[47.5344,7.9617],4334:[47.5537,7.9903],4402:[47.5035,7.7131],4410:[47.4866,7.7334],4411:[47.4597,7.7174],4412:[47.4714,7.6928],4413:[47.4429,7.6747],4414:[47.5056,7.7299],4415:[47.4729,7.7594],4416:[47.4489,7.7361],4417:[47.4315,7.7055],4418:[47.3977,7.692],4419:[47.4467,7.6954],4421:[47.4618,7.6904],4422:[47.513,7.7652],4423:[47.4922,7.7834],4424:[47.4159,7.7172],4425:[47.4019,7.7175],4426:[47.3902,7.6757],4431:[47.4038,7.7805],4432:[47.4252,7.7587],4433:[47.4489,7.7645],4434:[47.424,7.77],4435:[47.4073,7.7526],4436:[47.3926,7.7339],4437:[47.3815,7.7469],4438:[47.3483,7.7687],4441:[47.456,7.8291],4442:[47.4464,7.8374],4443:[47.4246,7.841],4444:[47.4318,7.8506],4445:[47.4151,7.866],4446:[47.4101,7.8447],4447:[47.4122,7.8372],4448:[47.3975,7.8448],4450:[47.4644,7.8107],4451:[47.4945,7.8237],4452:[47.4672,7.7851],4453:[47.4918,7.8044],4455:[47.4518,7.8078],4456:[47.4371,7.8117],4457:[47.4133,7.8112],4458:[47.3855,7.8204],4460:[47.4656,7.856],4461:[47.4627,7.8362],4462:[47.4845,7.8506],4463:[47.5055,7.8645],4464:[47.5239,7.8468],4465:[47.4888,7.8925],4466:[47.4687,7.8761],4467:[47.4611,7.9132],4468:[47.4397,7.9662],4469:[47.4506,7.9409],4492:[47.4485,7.8858],4493:[47.4403,7.9082],4494:[47.4331,7.9354],4495:[47.4175,7.9042],4496:[47.426,7.8983],4497:[47.4328,7.8839],4500:[47.2088,7.5323],4501:[47.2105,7.5373],4502:[47.208,7.5322],4503:[47.2092,7.5218],4509:[47.2105,7.5373],4512:[47.213,7.5002],4513:[47.2217,7.5149],4514:[47.2253,7.4725],4515:[47.2456,7.4998],4522:[47.2312,7.5317],4523:[47.2457,7.571],4524:[47.2615,7.5519],4525:[47.2569,7.5502],4528:[47.201,7.5543],4532:[47.2211,7.5504],4533:[47.2282,7.5719],4534:[47.2355,7.5979],4535:[47.2496,7.5908],4536:[47.2471,7.6132],4537:[47.2513,7.6453],4538:[47.2621,7.6598],4539:[47.265,7.632],4542:[47.2174,7.5832],4543:[47.2138,7.6209],4551:[47.2098,7.5862],4552:[47.1952,7.5856],4553:[47.1957,7.614],4554:[47.1862,7.6429],4556:[47.1807,7.6649],4557:[47.1818,7.622],4558:[47.1601,7.64],4562:[47.1886,7.5524],4563:[47.1707,7.5731],4564:[47.16,7.5803],4565:[47.1625,7.5937],4566:[47.1748,7.602],4571:[47.1618,7.5046],4573:[47.1707,7.5306],4574:[47.1889,7.4978],4576:[47.1475,7.4799],4577:[47.1413,7.4661],4578:[47.1453,7.4555],4579:[47.1374,7.4345],4581:[47.1504,7.5154],4582:[47.1428,7.4964],4583:[47.1288,7.4696],4584:[47.1248,7.4431],4585:[47.1138,7.4172],4586:[47.1409,7.5106],4587:[47.1327,7.4995],4588:[47.1181,7.4782],4600:[47.35,7.9037],4601:[47.3507,7.9],4609:[47.3509,7.9037],4612:[47.3447,7.869],4613:[47.3432,7.8558],4614:[47.3331,7.8436],4615:[47.3523,7.815],4616:[47.3222,7.8574],4617:[47.3163,7.8286],4618:[47.3066,7.8564],4622:[47.3214,7.7937],4623:[47.2982,7.7963],4624:[47.3073,7.819],4625:[47.3094,7.7659],4626:[47.2971,7.7713],4628:[47.2694,7.7956],4629:[47.2775,7.8364],4632:[47.3639,7.9041],4633:[47.3705,7.8559],4634:[47.393,7.8869],4652:[47.3647,7.9337],4653:[47.3645,7.9513],4654:[47.3823,7.9333],4655:[47.3986,7.9674],4656:[47.3454,7.9265],4657:[47.3492,7.9449],4658:[47.3459,7.9886],4663:[47.3206,7.9067],4665:[47.31,7.9343],4702:[47.2903,7.7159],4703:[47.2823,7.7526],4704:[47.2722,7.676],4710:[47.3157,7.6991],4712:[47.3162,7.6631],4713:[47.3083,7.6265],4714:[47.3099,7.6031],4715:[47.2921,7.5745],4716:[47.2719,7.4981],4717:[47.337,7.664],4718:[47.3302,7.7399],4719:[47.3457,7.6585],4800:[47.2859,7.9552],4801:[47.2526,7.8577],4802:[47.2791,7.929],4803:[47.2761,7.9018],4805:[47.2597,7.947],4806:[47.2664,7.9631],4807:[47.2526,7.8577],4808:[47.2526,7.8577],4809:[47.2526,7.8577],4812:[47.3028,7.9792],4813:[47.3045,8.0183],4814:[47.2858,8.0065],4852:[47.3022,7.8774],4853:[47.274,7.8537],4856:[47.251,7.8614],4900:[47.2121,7.7906],4901:[47.2952,8.0832],4902:[47.2952,8.0832],4911:[47.252,7.7666],4912:[47.235,7.7672],4913:[47.2402,7.7375],4914:[47.2406,7.8235],4915:[47.2325,7.838],4916:[47.2074,7.844],4917:[47.184,7.8416],4919:[47.1643,7.8447],4922:[47.2153,7.7462],4923:[47.2571,7.821],4924:[47.1995,7.8183],4932:[47.186,7.7927],4933:[47.1723,7.7731],4934:[47.1554,7.8195],4935:[47.1522,7.7765],4936:[47.1463,7.79],4937:[47.1366,7.7724],4938:[47.1286,7.8077],4942:[47.1021,7.773],4943:[47.1145,7.7529],4944:[47.1366,7.842],4950:[47.1061,7.8574],4952:[47.0799,7.8507],4953:[47.0981,7.8196],4954:[47.0787,7.8285],4955:[47.1458,7.8722],8000:[47.3818,8.5353],8001:[47.3742,8.5396],8002:[47.3601,8.5293],8003:[47.3722,8.5162],8004:[47.3808,8.5173],8005:[47.3893,8.5132],8006:[47.3886,8.544],8008:[47.3591,8.5529],8010:[47.4909,8.5492],8012:[47.4909,8.5492],8020:[47.3966,8.529],8021:[47.3966,8.529],8022:[47.3697,8.5414],8024:[47.3684,8.5478],8026:[47.382,8.5165],8027:[47.3296,8.5756],8031:[47.3853,8.5229],8032:[47.3615,8.5602],8034:[47.3588,8.555],8036:[47.3712,8.5217],8037:[47.3938,8.5296],8038:[47.3475,8.5233],8040:[47.3742,8.5171],8041:[47.3305,8.5157],8042:[47.4423,8.5774],8044:[47.3778,8.5882],8045:[47.3576,8.5201],8046:[47.4307,8.5118],8047:[47.3744,8.4831],8048:[47.3886,8.4807],8049:[47.4045,8.497],8050:[47.4123,8.5572],8051:[47.4009,8.5781],8052:[47.4233,8.5423],8053:[47.36,8.5962],8055:[47.3628,8.4937],8057:[47.3983,8.5469],8058:[47.4582,8.5555],8060:[47.4503,8.5612],8063:[47.3669,8.4972],8064:[47.3994,8.4818],8070:[47.4909,8.5492],8071:[47.4909,8.5492],8074:[47.4909,8.5492],8075:[47.4909,8.5492],8080:[47.2772,8.4539],8081:[47.4909,8.5492],8085:[47.5008,8.734],8086:[47.4909,8.5492],8087:[47.4909,8.5492],8088:[47.4909,8.5492],8090:[47.3837,8.5409],8091:[47.3784,8.5508],8092:[47.3782,8.5497],8093:[47.4084,8.5078],8096:[47.4909,8.5492],8098:[47.4909,8.5492],8099:[47.4909,8.5492],8102:[47.4091,8.4627],8103:[47.4122,8.4431],8104:[47.4216,8.4322],8105:[47.4425,8.4731],8106:[47.4536,8.4661],8107:[47.4585,8.441],8108:[47.4397,8.4381],8109:[47.4083,8.4397],8112:[47.4624,8.3901],8113:[47.4703,8.4022],8114:[47.4458,8.4051],8115:[47.4445,8.3868],8117:[47.3718,8.6363],8118:[47.3666,8.6246],8121:[47.3627,8.6357],8122:[47.3565,8.6271],8123:[47.3514,8.6408],8124:[47.3302,8.6789],8125:[47.3447,8.6037],8126:[47.3332,8.6212],8127:[47.3233,8.6482],8132:[47.3001,8.6866],8133:[47.2921,8.7086],8134:[47.3156,8.5229],8135:[47.2728,8.5433],8136:[47.2846,8.5506],8142:[47.3615,8.4666],8143:[47.3393,8.4883],8152:[47.4306,8.5648],8153:[47.4466,8.5264],8154:[47.4767,8.5195],8155:[47.4705,8.4794],8156:[47.4652,8.4974],8157:[47.4824,8.4535],8158:[47.4821,8.4364],8162:[47.4996,8.4541],8164:[47.5239,8.4392],8165:[47.4996,8.4043],8166:[47.5078,8.3789],8172:[47.4905,8.5034],8173:[47.5126,8.473],8174:[47.5257,8.4602],8175:[47.5451,8.466],8180:[47.5208,8.5545],8181:[47.5086,8.5078],8182:[47.5234,8.5156],8184:[47.5033,8.5458],8185:[47.4921,8.5554],8187:[47.5564,8.4376],8192:[47.5603,8.4834],8193:[47.5762,8.522],8194:[47.596,8.4921],8195:[47.5903,8.472],8196:[47.6059,8.5076],8197:[47.6115,8.5402],8200:[47.7114,8.6265],8201:[47.6965,8.6317],8203:[47.6963,8.662],8207:[47.7222,8.6619],8208:[47.7114,8.6376],8212:[47.6783,8.6128],8213:[47.6895,8.5004],8214:[47.709,8.4936],8215:[47.6968,8.4574],8216:[47.7057,8.4772],8217:[47.6649,8.4529],8218:[47.6628,8.4877],8219:[47.6687,8.43],8222:[47.698,8.5737],8223:[47.6858,8.557],8224:[47.7003,8.553],8225:[47.7143,8.5199],8226:[47.7491,8.4726],8228:[47.7667,8.5368],8231:[47.7335,8.5872],8232:[47.7606,8.6095],8233:[47.7919,8.6102],8234:[47.7403,8.6628],8235:[47.7565,8.6707],8236:[47.767,8.6577],8238:[47.696,8.689],8239:[47.7097,8.7219],8240:[47.7477,8.7106],8241:[47.7601,8.7211],8242:[47.7778,8.6776],8243:[47.7841,8.6587],8245:[47.6875,8.647],8246:[47.6842,8.6616],8247:[47.6854,8.6294],8248:[47.6714,8.6404],8252:[47.6591,8.6994],8253:[47.6872,8.7405],8254:[47.6626,8.747],8255:[47.6607,8.7711],8259:[47.6595,8.8266],8260:[47.6567,8.8597],8261:[47.6769,8.8319],8262:[47.6991,8.8155],8263:[47.7181,8.7851],8264:[47.641,8.8752],8265:[47.6416,8.9225],8266:[47.6156,8.977],8267:[47.6741,9.0192],8268:[47.6703,9.0559],8269:[47.6558,9.0569],8272:[47.6555,9.0909],8273:[47.6606,9.111],8274:[47.6596,9.1331],8280:[47.642,9.1778],8285:[47.5487,9.1785],8301:[47.4089,8.5953],8302:[47.4571,8.5987],8303:[47.4366,8.6354],8304:[47.41,8.595],8305:[47.4252,8.6162],8306:[47.4232,8.6297],8307:[47.4252,8.6974],8308:[47.4081,8.7202],8309:[47.4548,8.6518],8310:[47.4461,8.7018],8311:[47.4731,8.6778],8312:[47.4566,8.6888],8314:[47.449,8.7368],8315:[47.4462,8.6797],8317:[47.4309,8.6724],8320:[47.3881,8.7518],8322:[47.4041,8.7995],8330:[47.3704,8.7968],8331:[47.3437,8.812],8332:[47.3969,8.7756],8335:[47.3716,8.8198],8340:[47.305,8.8495],8342:[47.2899,8.8807],8344:[47.3493,8.8641],8345:[47.3418,8.8346],8352:[47.4982,8.7994],8353:[47.4948,8.8671],8354:[47.4796,8.8468],8355:[47.4863,8.9147],8356:[47.479,8.9018],8357:[47.4708,8.9237],8360:[47.461,8.964],8362:[47.4523,8.9387],8363:[47.441,8.9239],8370:[47.4643,9.005],8371:[47.6038,9.0557],8372:[47.4459,8.9869],8374:[47.4351,8.9558],8376:[47.3981,8.9568],8400:[47.4857,8.7293],8401:[47.5014,8.775],8403:[47.5014,8.775],8404:[47.5289,8.7564],8405:[47.475,8.7839],8406:[47.4857,8.7027],8408:[47.511,8.6963],8409:[47.5044,8.7749],8411:[47.496,8.7459],8412:[47.5477,8.6705],8413:[47.5307,8.6574],8414:[47.5478,8.6221],8415:[47.5635,8.6017],8416:[47.5754,8.6085],8418:[47.4699,8.8249],8421:[47.525,8.6235],8422:[47.5162,8.6468],8423:[47.5177,8.5922],8424:[47.5099,8.5938],8425:[47.4877,8.6184],8426:[47.4815,8.5983],8427:[47.5343,8.5801],8428:[47.5491,8.568],8442:[47.547,8.7088],8444:[47.5639,8.684],8447:[47.6661,8.616],8450:[47.5948,8.679],8451:[47.6081,8.6811],8452:[47.5831,8.6923],8453:[47.5985,8.6443],8454:[47.5733,8.5627],8455:[47.5788,8.572],8457:[47.5763,8.6705],8458:[47.5742,8.6513],8459:[47.5741,8.6249],8460:[47.6214,8.636],8461:[47.6245,8.6757],8462:[47.6396,8.6022],8463:[47.6531,8.6536],8464:[47.6045,8.5981],8465:[47.6462,8.6752],8466:[47.6389,8.6997],8467:[47.629,8.7273],8468:[47.637,8.7694],8471:[47.5598,8.7292],8472:[47.5336,8.7242],8474:[47.5547,8.7629],8475:[47.6154,8.7176],8476:[47.6393,8.7903],8477:[47.6329,8.7983],8478:[47.5827,8.7447],8479:[47.5734,8.7809],8482:[47.4674,8.7596],8483:[47.4531,8.7678],8484:[47.4306,8.7749],8486:[47.4522,8.8009],8487:[47.4461,8.827],8488:[47.4411,8.8815],8489:[47.4195,8.819],8492:[47.4165,8.8499],8493:[47.3862,8.8661],8494:[47.3637,8.8953],8495:[47.4238,8.9122],8496:[47.34,8.9533],8497:[47.3322,8.9264],8498:[47.31,8.9195],8499:[47.387,8.9111],8500:[47.5543,8.8975],8501:[47.5491,8.9103],8502:[47.5527,8.8844],8503:[47.5613,8.8904],8505:[47.6015,8.9531],8506:[47.6252,8.9303],8507:[47.6351,8.973],8508:[47.6328,9.0054],8509:[47.4331,9.7516],8510:[47.4331,9.7516],8512:[47.5448,8.9838],8514:[47.5591,9.0399],8522:[47.5198,8.9015],8523:[47.5165,8.8774],8524:[47.5877,8.8293],8525:[47.5987,8.7788],8526:[47.6065,8.7678],8532:[47.5883,8.883],8535:[47.6131,8.9182],8536:[47.6147,8.8713],8537:[47.6172,8.823],8542:[47.5209,8.8056],8543:[47.5275,8.832],8544:[47.536,8.7987],8545:[47.5424,8.7876],8546:[47.5511,8.8366],8547:[47.538,8.8529],8548:[47.563,8.8246],8552:[47.5775,8.9444],8553:[47.5755,8.9823],8554:[47.5853,9.0296],8555:[47.6046,9.0021],8556:[47.6081,9.0418],8558:[47.6389,9.0526],8560:[47.5878,9.0692],8561:[47.5871,9.0838],8564:[47.6204,9.0739],8565:[47.5986,9.1159],8566:[47.6103,9.1345],8570:[47.566,9.1084],8572:[47.5809,9.177],8573:[47.6141,9.1656],8574:[47.6153,9.1988],8575:[47.5419,9.1515],8576:[47.5658,9.1552],8577:[47.5192,9.1438],8580:[47.5491,9.295],8581:[47.5365,9.266],8582:[47.576,9.32],8583:[47.5439,9.1998],8584:[47.562,9.18],8585:[47.59,9.2241],8586:[47.553,9.2208],8587:[47.5594,9.2732],8588:[47.5219,9.2593],8589:[47.5037,9.2476],8590:[47.5657,9.3772],8592:[47.5835,9.3405],8593:[47.5935,9.3177],8594:[47.6036,9.2876],8595:[47.6106,9.2573],8596:[47.6288,9.2269],8597:[47.6264,9.2508],8598:[47.6356,9.2095],8599:[47.551,9.3563],8600:[47.3933,8.6235],8602:[47.413,8.6459],8603:[47.3801,8.6572],8604:[47.3945,8.6765],8605:[47.3861,8.719],8606:[47.3663,8.6912],8607:[47.3433,8.7711],8608:[47.2723,8.8099],8610:[47.3445,8.7209],8612:[47.3443,8.702],8613:[47.3463,8.7286],8614:[47.3256,8.754],8615:[47.3684,8.7401],8616:[47.3325,8.7115],8617:[47.3085,8.7236],8618:[47.2699,8.7286],8620:[47.3271,8.8014],8622:[47.3275,8.8013],8623:[47.3303,8.8154],8624:[47.3066,8.7809],8625:[47.3063,8.7585],8626:[47.2889,8.7964],8627:[47.2804,8.7639],8630:[47.2615,8.8639],8632:[47.2669,8.8479],8633:[47.2581,8.8039],8634:[47.2558,8.7682],8635:[47.2801,8.8492],8636:[47.2774,8.9252],8637:[47.2659,8.9294],8638:[47.2732,8.9735],8640:[47.2256,8.8157],8645:[47.2302,8.8455],8646:[47.2311,8.8857],8700:[47.3184,8.5927],8702:[47.3412,8.5844],8703:[47.3053,8.6039],8704:[47.2949,8.6327],8706:[47.2842,8.6553],8707:[47.2696,8.6843],8708:[47.2613,8.6969],8712:[47.2457,8.7341],8713:[47.2367,8.7557],8714:[47.2397,8.7874],8715:[47.2222,8.8804],8716:[47.2261,8.9482],8717:[47.1984,9.0051],8718:[47.1582,9.0729],8722:[47.2133,9.0251],8723:[47.1864,9.0629],8725:[47.2503,9.0001],8726:[47.2676,9.0486],8727:[47.2704,9.0109],8730:[47.2289,8.9703],8732:[47.2459,8.9441],8733:[47.2438,8.923],8734:[47.2448,8.885],8735:[47.2623,8.9885],8737:[47.2284,9.025],8738:[47.2419,9.0256],8739:[47.2201,9.05],8740:[47.2252,8.9866],8750:[47.0396,9.034],8751:[46.8899,8.9009],8752:[47.0994,9.0678],8753:[47.094,9.0754],8754:[47.0634,9.055],8755:[47.0384,9.0756],8756:[47.0131,9.0782],8757:[47.1195,9.1276],8758:[47.0783,9.151],8759:[47.0928,9.0596],8762:[46.9931,9.0854],8765:[46.9821,9.1532],8766:[46.9579,9.1716],8767:[46.9198,9.1723],8772:[46.987,9.0564],8773:[46.9465,9.0842],8774:[46.9761,9.0443],8775:[46.9686,9.0174],8777:[46.9421,9.0409],8782:[46.9369,9.0161],8783:[46.9218,8.9996],8784:[46.9393,8.9981],8800:[47.2913,8.5602],8802:[47.3211,8.5459],8803:[47.3076,8.5519],8804:[47.2431,8.6457],8805:[47.2097,8.6963],8806:[47.2045,8.733],8807:[47.2039,8.7567],8808:[47.1955,8.786],8810:[47.2506,8.6094],8815:[47.2478,8.5876],8816:[47.2151,8.6092],8820:[47.2256,8.6495],8824:[47.1932,8.644],8825:[47.1756,8.6648],8832:[47.1953,8.7145],8833:[47.1926,8.6806],8834:[47.1721,8.706],8835:[47.1807,8.7541],8836:[47.1529,8.7293],8840:[47.121,8.7419],8841:[47.1156,8.7761],8842:[47.0305,8.8126],8843:[47.0307,8.7593],8844:[47.1,8.8167],8845:[47.0719,8.8395],8846:[47.1342,8.8156],8847:[47.1618,8.7827],8849:[47.071,8.7159],8852:[47.1769,8.835],8853:[47.1926,8.8551],8854:[47.1686,8.8917],8855:[47.1984,8.8897],8856:[47.2031,8.9414],8857:[47.1207,8.901],8858:[47.1059,8.9188],8862:[47.1748,8.9257],8863:[47.1633,8.9464],8864:[47.1698,8.9754],8865:[47.1525,9.0262],8866:[47.1337,9.0612],8867:[47.1255,9.0532],8868:[47.1139,9.0435],8872:[47.1366,9.1241],8873:[47.1698,9.1744],8874:[47.1172,9.1729],8877:[47.1134,9.2159],8878:[47.1296,9.2158],8879:[47.042,9.4313],8880:[47.1241,9.3127],8881:[47.1322,9.3021],8882:[47.1131,9.2512],8883:[47.1013,9.2317],8884:[47.0898,9.2524],8885:[47.1125,9.2791],8886:[47.0401,9.3775],8887:[47.0438,9.424],8888:[47.058,9.4119],8889:[47.0562,9.3995],8890:[47.0925,9.339],8892:[47.106,9.3465],8893:[47.0822,9.3736],8894:[47.0734,9.3518],8895:[47.0717,9.323],8896:[47.0971,9.3071],8897:[47.0453,9.2562],8898:[47.0889,9.2782],8901:[47.3827,8.4222],8902:[47.3867,8.4207],8903:[47.3537,8.4371],8904:[47.3369,8.4427],8905:[47.3201,8.4286],8906:[47.3152,8.4681],8907:[47.3352,8.4672],8908:[47.2978,8.4483],8909:[47.2888,8.4291],8910:[47.2791,8.4595],8911:[47.2419,8.496],8912:[47.2644,8.4309],8913:[47.2815,8.4041],8914:[47.276,8.4861],8915:[47.2534,8.527],8916:[47.297,8.3943],8917:[47.3113,8.3901],8918:[47.3214,8.3812],8919:[47.3137,8.362],8925:[47.2274,8.5491],8926:[47.2246,8.5123],8932:[47.243,8.4621],8933:[47.2345,8.4311],8934:[47.2236,8.4628],8942:[47.2734,8.57],8951:[47.4076,8.4139],8952:[47.3983,8.4488],8953:[47.4009,8.4062],8954:[47.4229,8.4144],8955:[47.4275,8.3948],8956:[47.4326,8.3484],8957:[47.4222,8.3639],8962:[47.3597,8.3435],8964:[47.366,8.3849],8965:[47.3569,8.3677],8966:[47.3361,8.3869],8967:[47.368,8.3631],9000:[47.4246,9.3749],9001:[47.4262,9.3737],9004:[47.426,9.3774],9006:[47.431,9.3956],9007:[47.4297,9.3888],9008:[47.4349,9.3855],9010:[47.4364,9.3778],9011:[47.4203,9.4005],9012:[47.4093,9.3652],9013:[47.4196,9.3552],9014:[47.4106,9.3319],9015:[47.4041,9.3022],9016:[47.4376,9.4057],9020:[47.4322,9.3756],9022:[47.4322,9.3756],9023:[47.4322,9.3756],9024:[47.4322,9.3737],9025:[47.4322,9.3737],9026:[47.4322,9.3737],9027:[47.4322,9.3737],9028:[47.4322,9.3756],9029:[47.4322,9.3737],9030:[47.4241,9.3265],9032:[47.4428,9.3443],9033:[47.453,9.4499],9034:[47.4395,9.4635],9035:[47.4408,9.5074],9036:[47.4552,9.5123],9037:[47.4251,9.4365],9038:[47.4261,9.483],9042:[47.4128,9.4372],9043:[47.4079,9.4647],9044:[47.4158,9.4904],9050:[47.3369,9.4138],9052:[47.3919,9.367],9053:[47.3927,9.4015],9054:[47.3693,9.3671],9055:[47.3731,9.4245],9056:[47.3616,9.4738],9057:[47.2757,9.3958],9058:[47.2972,9.4558],9062:[47.3984,9.3578],9063:[47.3745,9.3449],9064:[47.34,9.3222],9100:[47.3806,9.2796],9101:[47.3627,9.2884],9102:[47.3747,9.3425],9103:[47.3543,9.2489],9104:[47.357,9.2852],9105:[47.3219,9.2005],9107:[47.3009,9.298],9108:[47.322,9.3486],9112:[47.3788,9.2394],9113:[47.37,9.1964],9114:[47.3517,9.1782],9115:[47.3372,9.1915],9116:[47.3981,9.1773],9122:[47.3471,9.1512],9123:[47.3731,9.136],9125:[47.3314,9.1415],9126:[47.349,9.1308],9127:[47.3197,9.177],9200:[47.4155,9.254],9201:[47.4178,9.2488],9203:[47.4379,9.1977],9204:[47.4392,9.2708],9205:[47.4613,9.288],9212:[47.4441,9.2558],9213:[47.4775,9.2462],9214:[47.5269,9.1965],9215:[47.5232,9.1807],9216:[47.5179,9.2231],9217:[47.5042,9.1721],9220:[47.4989,9.2703],9223:[47.502,9.2026],9225:[47.4891,9.2921],9230:[47.4134,9.1821],9231:[47.391,9.227],9240:[47.4307,9.1615],9242:[47.428,9.1197],9243:[47.4277,9.0919],9244:[47.4446,9.1412],9245:[47.4554,9.1495],9246:[47.466,9.2032],9247:[47.4542,9.117],9248:[47.421,9.1353],9249:[47.4484,9.0939],9300:[47.4599,9.39],9301:[46.8421,7.1492],9304:[47.4719,9.3365],9305:[47.4867,9.4075],9306:[47.486,9.3957],9308:[47.4968,9.3536],9312:[47.4894,9.3375],9313:[47.5182,9.3191],9314:[47.534,9.3453],9315:[47.5173,9.3659],9320:[47.514,9.4199],9322:[47.5458,9.3748],9323:[47.5032,9.4421],9325:[47.5026,9.3884],9326:[47.495,9.4627],9327:[47.4867,9.4523],9400:[47.4789,9.4917],9401:[47.5112,9.5903],9402:[47.4683,9.4239],9403:[47.4788,9.47],9404:[47.4689,9.4869],9405:[47.4644,9.5356],9410:[47.451,9.5302],9411:[47.4021,9.5565],9413:[47.4175,9.5493],9414:[47.4266,9.5586],9422:[47.4799,9.5337],9423:[47.4912,9.5555],9424:[47.467,9.586],9425:[47.48,9.5704],9426:[47.4591,9.5798],9427:[47.4537,9.5505],9428:[47.4514,9.6023],9430:[47.4504,9.6288],9434:[47.4296,9.6404],9435:[47.4122,9.6267],9436:[47.4068,9.606],9437:[47.3921,9.569],9442:[47.4302,9.611],9443:[47.4055,9.6376],9444:[47.3879,9.6593],9445:[47.3977,9.5827],9450:[47.3783,9.5539],9451:[47.366,9.6033],9452:[47.3585,9.5319],9453:[47.3459,9.519],9462:[47.3344,9.5872],9463:[47.3193,9.5569],9464:[47.2853,9.5268],9465:[47.2368,9.4977],9466:[47.2655,9.5074],9467:[47.2451,9.4734],9468:[47.2272,9.4508],9469:[47.2115,9.4914],9470:[47.1632,9.4785],9471:[47.1844,9.1046],9472:[47.177,9.4199],9473:[47.2077,9.4448],9475:[47.1219,9.4869],9476:[47.0908,9.493],9477:[47.0744,9.4787],9478:[47.0909,9.4182],9479:[47.0962,9.4794],9485:[47.1986,9.5431],9486:[47.2084,9.5715],9487:[47.214,9.5055],9488:[47.2392,9.5572],9489:[47.1675,9.5106],9490:[47.1542,9.5439],9491:[47.2417,9.5253],9492:[47.205,9.5241],9493:[46.7027,7.8104],9494:[47.1667,9.5112],9495:[47.0842,9.5573],9496:[47.0681,9.515],9497:[47.1182,9.5434],9498:[47.1855,9.5454],9500:[47.4655,9.0494],9501:[47.3442,8.9135],9502:[47.5028,9.0722],9503:[47.5226,9.0929],9504:[47.5367,9.085],9506:[47.5144,8.9963],9507:[47.5255,8.9565],9508:[47.524,8.9827],9512:[47.4753,9.0607],9514:[47.4985,9.108],9515:[47.4959,9.1351],9517:[47.5374,9.1228],9523:[47.4658,9.0844],9524:[47.4706,9.1152],9525:[47.4747,9.1496],9526:[47.491,9.1636],9527:[47.4798,9.1827],9532:[47.4486,9.0462],9533:[47.4161,9.0296],9534:[47.3974,9.0018],9535:[47.4448,9.0327],9536:[47.4414,9.0747],9542:[47.4775,8.9939],9543:[47.4915,9.0045],9545:[47.4177,8.7765],9546:[47.4809,8.9428],9547:[47.5038,8.9157],9548:[47.5317,8.9238],9552:[47.4816,9.0352],9553:[47.4959,9.0256],9554:[47.5102,9.0306],9555:[47.5167,9.0333],9556:[47.5318,9.0266],9562:[47.5304,9.0682],9565:[47.5485,9.085],9573:[47.441,9.007],9601:[47.3823,9.0667],9602:[47.3978,9.0488],9604:[47.4046,9.1047],9606:[47.3603,9.0703],9607:[47.3632,9.0343],9608:[47.3811,9.0896],9612:[47.3635,9.0116],9613:[47.3708,8.9852],9614:[47.3287,9.0229],9615:[47.338,9.0723],9620:[47.3227,9.0876],9621:[47.3478,9.1031],9622:[47.3174,9.0497],9630:[47.2889,9.0934],9631:[47.2872,9.1013],9633:[47.3029,9.1854],9642:[47.2624,9.1429],9643:[47.247,9.172],9650:[47.2081,9.1869],9651:[47.2417,9.2237],9652:[47.2298,9.1944],9655:[47.1984,9.2272],9656:[47.1835,9.2628],9657:[47.1972,9.3086],9658:[47.2033,9.3505]};
+function deriveZone(plz){
+  if(!plz) return 'Unbekannt';
+  return PLZ_COORDS[plz] ? plz : plz; // zone key is just the PLZ itself - never shown to the user, only used to look up coordinates
+}
+function extractPlz(text){
+  const m = (text||'').match(/\b(\d{4})\b/);
+  return m ? m[1] : null;
+}
+
+/* ---------------------------------------------------------------
+   ORDER BUILDING & MERGE
+--------------------------------------------------------------- */
+function detectForcedEmployee(notes, roster, introAppointment){
+  if(introAppointment && introAppointment.fix){
+    const introName = introAppointment.name.toLowerCase().trim();
+    for(const r of roster){
+      const fullName = r.name.toLowerCase().trim();
+      // compare the FULL roster name (not just the first token) to avoid false positives
+      // like "Maria Fernanda" matching "Maria Laura" just because both start with "Maria"
+      if(introName === fullName || introName.includes(fullName) || fullName.includes(introName)) return r.name;
+    }
+  }
+  if(!notes) return null;
+  for(const r of roster){
+    const first = r.name.split(' ')[0].toLowerCase();
+    const re = new RegExp('nur\\s+'+first.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&'), 'i');
+    if(re.test(notes)) return r.name;
+  }
+  return null;
+}
+
+// Orders that already show a real name in the "Disponentenliste" (not the blank
+// placeholder) are already fixed elsewhere in Aduna. They must still show up inside
+// that person's route/hours - if the name matches someone in today's roster, use that
+// team; otherwise add a small virtual team just for that name so the fixed job is
+// visible in the schedule instead of being listed separately.
+function resolvePreAssignedRoster(orders, roster){
+  const preNames = [...new Set(orders.filter(o=>o.preAssigned).map(o=>o.preAssigned))];
+  const nameMap = {};
+  const extraRoster = [];
+
+  // Route colors must be unique within a single day's dispo. The previous approach
+  // called the shared, ever-incrementing nextColor() here, which drifts further
+  // with every recompute() and eventually wraps around the 8-color palette,
+  // reusing a color already assigned to a different team on the same day (this is
+  // what caused e.g. "Alba + Probe" and "Ginett" to render in the same color).
+  // Picking colors locally, skipping anything already in use this run, prevents that.
+  const usedColors = new Set(roster.map(r=>r.color));
+  let localColorCursor = 0;
+  function pickUnusedColor(){
+    for(let i=0;i<COLORS.length;i++){
+      const c = COLORS[(localColorCursor+i) % COLORS.length];
+      if(!usedColors.has(c)){ localColorCursor += i+1; usedColors.add(c); return c; }
+    }
+    const c = COLORS[localColorCursor % COLORS.length]; // more than 8 teams in one day - colors must repeat
+    localColorCursor++;
+    return c;
+  }
+
+  for(const raw of preNames){
+    // Aduna full names are written as "Firstname Lastname1 Lastname2 (staffId)" -
+    // e.g. "Alba Cristina Saldivar Morales (46773)" is the SAME person as the
+    // roster's short "Alba". Matching on the leading first-name token (after
+    // stripping the id) reliably identifies this - a previous version treated any
+    // name with an id suffix as automatically a different, unrelated person, which
+    // created phantom duplicate "second Alba" / "second Lina" teams and caused their
+    // fixed customers to be evaluated against an empty virtual day instead of their
+    // real one (routing them to SPEZ even though their actual day had room).
+    const cleaned = raw.replace(/\s*\(\d+\)\s*$/, '').trim();
+    const cleanedLower = cleaned.toLowerCase();
+    const rawFirstToken = cleanedLower.split(/\s+/)[0] || '';
+
+    // First-name-token match is authoritative and must win outright - a middle name
+    // can otherwise cause a false substring match (e.g. "Alba CRISTINA Saldivar
+    // Morales" contains "Cristina", which would wrongly match the roster's separate
+    // "Cristina" if substring matching were allowed to compete with the real match).
+    let matched = null;
+    const firstTokenMatches = roster.filter(r=> r.name.toLowerCase().split(/\s+/)[0] === rawFirstToken);
+    if(firstTokenMatches.length === 1){
+      matched = firstTokenMatches[0];
+    } else if(firstTokenMatches.length === 0){
+      // no first-name match at all - fall back to broader substring containment
+      const substringMatches = roster.filter(r=>{
+        const full = r.name.toLowerCase();
+        return cleanedLower.includes(full) || full.includes(cleanedLower);
+      });
+      if(substringMatches.length === 1) matched = substringMatches[0];
+      else if(substringMatches.length > 1) matched = substringMatches.find(r=> cleanedLower.includes(r.name.toLowerCase())) || null;
+    }
+    // if multiple roster members share the exact same first name, leave unmatched
+    // (creates its own virtual entry below) rather than guessing between them
+
+    if(matched){
+      nameMap[raw] = matched.name;
+    } else {
+      const virtualName = cleaned || raw;
+      nameMap[raw] = virtualName;
+      extraRoster.push({ id:'preassigned-'+virtualName, name:virtualName, vehicle:true, teamWith:null, color:pickUnusedColor(), isPreAssignedVirtual:true });
+    }
+  }
+  return { extendedRoster: [...roster, ...extraRoster], nameMap };
+}
+function isDefaultWindow(zeit){
+  return zeit && zeit.von==='08:00' && zeit.bis==='17:00';
+}
+
+function buildOrder({auftragNr, addressStreet, addressPlzOrt, typ, rapport, extra, targetDatum, preAssigned}, rosterSnapshot){
+  const plzOrt = addressPlzOrt || (rapport ? rapport.plzOrt : '') || '';
+  const street = addressStreet || (rapport ? rapport.street : '') || '';
+  const plz = extractPlz(plzOrt) || extractPlz(street);
+  const notes = rapport ? rapport.notes : '';
+  const zeit = rapport ? rapport.zeit : null;
+  const isSpecialTime = !!(zeit && !isDefaultWindow(zeit));
+  // Sanity check: a fixed time from free-text notes should always fall within the
+  // 08:00-17:00 working day (24h Swiss convention). If it doesn't, it's very likely a
+  // mis-parsed 12h expression ("2 Uhr" meant as 14:00) rather than a real time - flag it
+  // instead of silently scheduling something implausible.
+  const zeitOutsideWorkday = !!(zeit && isSpecialTime && (timeToMin(zeit.von) < 8*60 || timeToMin(zeit.von) > 17*60));
+
+  // Hours must come from the "Datum + X.XX Std." line matching the date we're actually
+  // dispatching for (there can be several such lines in one Rapport for recurring orders).
+  // Falls back to the separate "Aufwand:" field only if no matching date line was found.
+  let aufwand = null;
+  if(rapport){
+    const pair = (rapport.dateStdPairs||[]).find(p=>p.datum===targetDatum);
+    aufwand = pair ? pair.std : rapport.aufwand;
+  }
+
+  // Business rule: "Einführung" appointments always take a flat 30 minutes, regardless
+  // of whatever hours the Rapport happens to list for that date (often 0.00 or 0.50, but
+  // not reliably so).
+  const typName = (typ || (rapport?rapport.bezeichnung:'') || '');
+  const isEinfuehrung = /einführung/i.test(typName);
+  if(isEinfuehrung) aufwand = 0.5;
+
+  // "Ferienabwesenheit" (and similar Abwesenheit/Absenz entries) are not a client job at
+  // all - they're an internal HR note recording that the named employee is away that
+  // day. They carry no real cleaning work and must never be routed as a stop (with a
+  // phantom 0h time slot breaking up that person's real route) - they're informational
+  // only and get pulled out before scheduling.
+  const isAbsence = /ferienabwesenheit|^absenz\b|^abwesenheit\b/i.test(typName);
+
+  return {
+    auftragNr,
+    address: (street ? street+', ' : '') + plzOrt,
+    customerName: (rapport ? rapport.customerName : null) || null,
+    typ: typName,
+    aufwand,
+    isEinfuehrung,
+    isAbsence,
+    zeit, isSpecialTime, zeitOutsideWorkday,
+    notes,
+    aktiv: rapport ? rapport.aktiv : null,
+    plz, zone: deriveZone(plz),
+    forcedEmployee: detectForcedEmployee(notes, rosterSnapshot, rapport?rapport.introAppointment:null),
+    extra: !!extra,
+    preAssigned: preAssigned || null,
+    missingAufwand: aufwand==null,
+    missingRapport: !rapport
+  };
+}
+
+function mergeOrders(listRows, rapportOrders, targetDatum, rosterSnapshot){
+  const rapportMap = {};
+  rapportOrders.forEach(r=>{ rapportMap[r.auftragNr] = r; });
+  const seen = new Set();
+  const result = [];
+  for(const row of listRows){
+    seen.add(row.auftragNr);
+    const rapport = rapportMap[row.auftragNr] || null;
+    // split address into street/plzOrt best-effort (list address is "Street, PLZ Ort")
+    let addressStreet='', addressPlzOrt='';
+    const m = row.address.match(/^(.*?),\s*(\d{4}\s+.+)$/);
+    if(m){ addressStreet=m[1].trim(); addressPlzOrt=m[2].trim(); }
+    else { addressPlzOrt = row.address; }
+    result.push(buildOrder({auftragNr:row.auftragNr, addressStreet, addressPlzOrt, typ:row.typ, rapport, extra:false, targetDatum, preAssigned:row.preAssigned}, rosterSnapshot));
+  }
+  // extra rapport orders matching the target date (on any of their listed dates) but absent from the master list
+  Object.values(rapportMap).forEach(r=>{
+    const matchesDate = targetDatum && (r.dateStdPairs||[]).some(p=>p.datum===targetDatum);
+    if(!seen.has(r.auftragNr) && matchesDate){
+      result.push(buildOrder({auftragNr:r.auftragNr, addressStreet:r.street, addressPlzOrt:r.plzOrt, typ:r.bezeichnung, rapport:r, extra:true, targetDatum, preAssigned:null}, rosterSnapshot));
+    }
+  });
+  return result;
+}
+
+/* ---------------------------------------------------------------
+   BUILT-IN TRAVEL-TIME ESTIMATE (no external API/key needed)
+   Computed from real coordinates (haversine straight-line distance x a
+   road-detour factor), not a coarse regional lookup table - this is what
+   actually fixes routes that used to jump between unrelated localities
+   just because they shared a zone bucket.
+--------------------------------------------------------------- */
+function coordsForZone(zone){
+  const c = PLZ_COORDS[zone];
+  return c ? {lat:c[0], lon:c[1]} : null;
+}
+function haversineKm(a,b){
+  const R=6371;
+  const dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const lat1=a.lat*Math.PI/180, lat2=b.lat*Math.PI/180;
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function zoneMinutes(zoneA, zoneB){
+  // Every transition between stops includes not just driving but parking, unloading
+  // equipment and walking to the door - a fixed buffer per stop, not just pure
+  // point-to-point drive time, matches real elapsed time much better (a Rapport
+  // comparison showed routes finishing unrealistically early without this).
+  const ARRIVAL_BUFFER_MIN = 8;
+  if(zoneA===zoneB) return 12; // short local hop within the same locality, still needs parking/setup
+  const a = coordsForZone(zoneA), b = coordsForZone(zoneB);
+  if(a && b){
+    const km = haversineKm(a,b) * 1.35; // roads are never a straight line
+    const speed = 30 + Math.min(km, 35); // km/h: slower for short local hops, faster once cantonal roads/highway kick in for longer trips, capped ~65 (slightly more conservative than pure highway speed)
+    return Math.max(10, Math.round(km/speed*60) + ARRIVAL_BUFFER_MIN);
+  }
+  // last-resort fallback if a postal code genuinely isn't in the database at all
+  // (e.g. a typo, or a non-Swiss address): estimate from the numeric PLZ gap
+  const numA = parseInt(zoneA, 10), numB = parseInt(zoneB, 10);
+  if(!isNaN(numA) && !isNaN(numB)) return Math.min(90, 15 + Math.abs(numA-numB)*2) + ARRIVAL_BUFFER_MIN;
+  return 30 + ARRIVAL_BUFFER_MIN; // generic default
+}
+
+// Rough km estimate from a driving-time estimate, used only for display totals.
+function estimateKm(mins){
+  if(!mins || mins<=0) return 0;
+  const speed = 35 + Math.min(mins, 80)/2;
+  return Math.round((mins/60)*speed*10)/10;
+}
+
+/* ---------------------------------------------------------------
+   ASSIGNMENT + ROUTING ALGORITHM
+   Nearest-insertion using the built-in zone travel-time estimate above.
+   Most isolated jobs are placed first so remote orders get the best
+   available slot instead of becoming leftover bad pairings. Orders that
+   cannot be scheduled by anyone within 8h/day or the 08:00-17:00 window
+   are pulled out into a separate "Aufträge für SPEZ" bucket instead of
+   being forced onto an already-full team.
+--------------------------------------------------------------- */
+function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function minToTime(m){ m=Math.round(m); const h=Math.floor(m/60); const mm=m%60; return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
+
+const DAY_START = 8*60;   // 08:00
+const DAY_END = 17*60;    // 17:00
+const MAX_WORK_MIN = 8*60; // max. 8 Std. pro Mitarbeiterin/Team und Tag
+
+function buildTeams(rosterSnapshot){
+  const vehicleEmployees = rosterSnapshot.filter(r=>r.vehicle);
+  const teams = vehicleEmployees.map(v=>({
+    id:v.id, color:v.color,
+    members:[v.name, ...rosterSnapshot.filter(r=>!r.vehicle && r.teamWith===v.id).map(r=>r.name)],
+    cursor: 8*60, lastZone:null, totalMin:0, totalKm:0, items:[]
+  }));
+  rosterSnapshot.filter(r=>!r.vehicle && !r.teamWith).forEach(r=>{
+    teams.push({id:r.id, color:r.color, members:[r.name], cursor:8*60, lastZone:null, totalMin:0, totalKm:0, items:[], noVehicle:true});
+  });
+  return teams;
+}
+function findTeamByMemberName(teams, name){
+  return teams.find(t=>t.members.some(m=>m.toLowerCase()===String(name).toLowerCase()));
+}
+
+function roundToQuarter(min){ return Math.round(min/15)*15; }
+
+const HOME_ZONE = deriveZone('8307'); // Effretikon - company base
+function distanceFromHome(zone){ return zoneMinutes(zone, HOME_ZONE); }
+
+// Routes should start at the customer farthest from Effretikon (home base) and work
+// their way back, ending closest to base - grouping same-zone stops together so a
+// route never doubles back to a zone it already left. Fixed-time appointments keep
+// their exact clock time and position; only the flexible stops around them are
+// reordered (previously any fixed appointment skipped reordering entirely, which
+// let bad zig-zags like "Dübendorf -> Oberglatt -> back to Dübendorf" slip through).
+// Pure function: given a list of items (already carrying their correct duration as
+// end-start), returns the best achievable ordering/timing without mutating anything -
+// used both to actually reorder a team's day and to test "what if" scenarios during
+// the relocation pass below.
+function computeOptimalSequence(items){
+  if(items.length === 0) return { items:[], feasible:true, totalTravel:0 };
+  if(items.length === 1) return { items:[{...items[0], travelMin:0}], feasible:true, totalTravel:0 };
+
+  const segments = [];
+  let flexRun = [];
+  for(const it of items){
+    if(it.forcedTime){
+      if(flexRun.length){ segments.push({type:'flex', items:flexRun}); flexRun = []; }
+      segments.push({type:'fixed', item: it});
+    } else {
+      flexRun.push(it);
+    }
+  }
+  if(flexRun.length) segments.push({type:'flex', items:flexRun});
+
+  let cursor = DAY_START, lastZone = null, totalTravel = 0;
+  const newItems = [];
+  for(const seg of segments){
+    if(seg.type==='fixed'){
+      const it = seg.item;
+      const travelIn = lastZone ? zoneMinutes(lastZone, it.zone) : 0;
+      if(cursor + travelIn > it.start) return { items:null, feasible:false };
+      newItems.push({...it, travelMin: travelIn});
+      totalTravel += travelIn;
+      cursor = it.end;
+      lastZone = it.zone;
+    } else {
+      // Nearest-neighbor from wherever the route currently stands (e.g. right after
+      // a fixed stop) rather than a blind "farthest zone first" sort - this finishes
+      // whatever zone we're already in before moving somewhere new, and only falls
+      // back to preferring the farther zone when there's no reason to prefer either.
+      const remaining = seg.items.slice();
+      while(remaining.length){
+        let bestIdx = 0, bestCost = Infinity, bestDist = -Infinity;
+        remaining.forEach((cand, idx)=>{
+          const cost = lastZone ? zoneMinutes(lastZone, cand.zone) : 0;
+          const dist = distanceFromHome(cand.zone);
+          if(cost < bestCost || (cost===bestCost && dist>bestDist)){
+            bestCost = cost; bestDist = dist; bestIdx = idx;
+          }
+        });
+        const it = remaining.splice(bestIdx,1)[0];
+        const travel = lastZone ? zoneMinutes(lastZone, it.zone) : 0;
+        const dur = it.end - it.start;
+        const start = roundToQuarter(Math.max(cursor, DAY_START) + travel);
+        const end = start + dur;
+        if(end > DAY_END) return { items:null, feasible:false };
+        newItems.push({...it, start, end, travelMin: travel});
+        totalTravel += travel;
+        cursor = end;
+        lastZone = it.zone;
+      }
+    }
+  }
+  return { items:newItems, feasible:true, totalTravel };
+}
+
+function reorderRouteByDistanceFromHome(team){
+  if(team.items.length <= 1) return;
+  const result = computeOptimalSequence(team.items);
+  if(!result.feasible) return; // keep original order if it no longer fits
+  team.items = result.items;
+  team.totalKm = result.items.reduce((s,it)=> s + estimateKm(it.travelMin||0), 0);
+}
+
+// Local-search cleanup pass: after the initial greedy assignment, some stops can end
+// up on a team that's already busy/scattered even though another team has spare
+// capacity and would barely need to detour for it. This repeatedly looks for a single
+// stop that can be moved from one team to another with a net reduction in total
+// driving time, and applies it - similar in spirit to how a human dispatcher would
+// glance at the map and shuffle a job or two after the first pass. Fixed-time and
+// locked/pre-assigned stops never move.
+function improveRoutesByRelocation(teams){
+  const MAX_PASSES = 80;
+  for(let pass=0; pass<MAX_PASSES; pass++){
+    let appliedMove = false;
+
+    for(const teamA of teams){
+      const movableCandidates = teamA.items.filter(it=>!it.forcedTime && !it.isLocked && !it.locked);
+
+      for(const candidate of movableCandidates){
+        const withoutItems = teamA.items.filter(it=>it!==candidate);
+        const withoutResult = computeOptimalSequence(withoutItems);
+        if(!withoutResult.feasible) continue;
+
+        const currentResult = computeOptimalSequence(teamA.items);
+        if(!currentResult.feasible) continue; // shouldn't happen, but stay safe
+        const removalSaving = currentResult.totalTravel - withoutResult.totalTravel;
+
+        const candidateDur = candidate.end - candidate.start;
+        let bestTeam = null, bestInsertionCost = Infinity, bestWithResult = null;
+
+        for(const teamB of teams){
+          if(teamB === teamA) continue;
+          if(teamB.totalMin - 0 + candidateDur > MAX_WORK_MIN) continue; // would overload teamB
+          const currentBResult = computeOptimalSequence(teamB.items);
+          if(!currentBResult.feasible) continue;
+          const withItems = teamB.items.concat([candidate]);
+          const withResult = computeOptimalSequence(withItems);
+          if(!withResult.feasible) continue;
+          // Same fill-bonus as the initial assignment pass: an under-filled two-person
+          // team should keep absorbing work in preference to a solo team, since it
+          // completes each job faster and has more room left for its size.
+          const isUnderfilledPair = teamB.members.length > 1 && teamB.items.length > 0 && teamB.totalMin < MAX_WORK_MIN * 0.7;
+          const insertionCost = (withResult.totalTravel - currentBResult.totalTravel) - (isUnderfilledPair ? 40 : 0);
+          if(insertionCost < bestInsertionCost){
+            bestInsertionCost = insertionCost; bestTeam = teamB; bestWithResult = withResult;
+          }
+        }
+
+        // Only move if it meaningfully reduces total system driving time (a small
+        // buffer avoids pointless churn from rounding-level "improvements")
+        if(bestTeam && bestInsertionCost < removalSaving - 3){
+          teamA.items = withoutResult.items;
+          teamA.totalKm = withoutResult.items.reduce((s,it)=> s + estimateKm(it.travelMin||0), 0);
+          teamA.totalMin -= candidateDur;
+
+          bestTeam.items = bestWithResult.items;
+          bestTeam.totalKm = bestWithResult.items.reduce((s,it)=> s + estimateKm(it.travelMin||0), 0);
+          bestTeam.totalMin += candidateDur;
+
+          appliedMove = true;
+          break;
+        }
+      }
+      if(appliedMove) break;
+    }
+    if(!appliedMove) break;
+  }
+}
+
+// The hours in a Rapport are the total workload for the job, not per-person time.
+// A two-person team (driver + helper) splits the work and is done in half the
+// wall-clock time - a "2 Std." job takes a pair only 1 hour on-site together.
+// Exception: "Einführung" appointments are always a flat 30 minutes no matter how
+// many people show up - there's nothing to split, so they're never halved.
+function jobDurationMinutes(aufwand, team, isEinfuehrung){
+  const base = (aufwand!=null ? aufwand : 1) * 60;
+  if(isEinfuehrung) return base;
+  const dur = (team && team.members && team.members.length > 1) ? base/2 : base;
+  // Halving an odd aufwand (e.g. 2.75h/2=82.5min) gives a fractional-minute result,
+  // which then produces end times off the 15-minute grid (e.g. 14:53 instead of
+  // 14:45/15:00) - round to the nearest quarter-hour so every stop's time is clean.
+  return Math.round(dur/15)*15;
+}
+
+// Wraps autoAssign so pre-assigned orders (already showing a real name in the
+// Disponentenliste) count towards that specific person's route/hours instead of
+// being pulled out separately - they are forced to that person (existing roster
+// member or a small virtual team for a name outside today's roster) and locked.
+function scheduleWithPreAssigned(merged, roster){
+  const { extendedRoster, nameMap } = resolvePreAssignedRoster(merged, roster);
+  const preparedOrders = merged.map(o=>{
+    if(!o.preAssigned) return o;
+    return { ...o, forcedEmployee: nameMap[o.preAssigned], isLocked: true };
+  });
+  const { teams, warnings, spez } = autoAssign(preparedOrders, extendedRoster);
+  return { teams, warnings, spez, extendedRoster };
+}
+
+function autoAssign(orders, rosterSnapshot){
+  const teams = buildTeams(rosterSnapshot);
+  const warnings = [];
+  const spez = [];
+
+  // Anything with a real clock-time requirement - whether tied to a named employee
+  // ("nur Lina allein") or not ("Einführung um 14.30 Uhr fix") - must be scheduled
+  // at that exact time, by whoever ends up doing it. Everything else is free-floating
+  // and gets placed wherever it fits best.
+  const anchored = orders.filter(o => o.forcedEmployee || o.isSpecialTime);
+  anchored.filter(o=>o.zeitOutsideWorkday).forEach(o=>{
+    warnings.push(`Auftrag ${o.auftragNr}: erkannte Zeit ${o.zeit.von} Uhr liegt ausserhalb 08:00–17:00 – bitte Original-Rapport prüfen (evtl. 12h/24h-Verwechslung, z.B. "2 Uhr" gemeint als 14:00).`);
+  });
+  const normal = orders.filter(o => !o.forcedEmployee && !o.isSpecialTime);
+
+  anchored.sort((a,b)=> (a.zeit?timeToMin(a.zeit.von):DAY_START) - (b.zeit?timeToMin(b.zeit.von):DAY_START));
+
+  for(const o of anchored){
+    let team = o.forcedEmployee ? findTeamByMemberName(teams, o.forcedEmployee) : null;
+    const dur = jobDurationMinutes(o.aufwand, team, o.isEinfuehrung);
+
+    if(o.forcedEmployee && !team){
+      warnings.push(`Mitarbeiterin "${o.forcedEmployee}" (aus Bemerkung zu Auftrag ${o.auftragNr}) ist nicht im heutigen Team.` + (o.isSpecialTime ? ' Feste Zeit wird trotzdem eingehalten, jemand anderes übernimmt.' : ' Auftrag wurde frei zugeteilt.'));
+    }
+
+    if(team){
+      // pinned to a specific, named team member
+      const travel = team.items.length ? zoneMinutes(team.lastZone, o.zone) : 0;
+      let start;
+      if(o.zeit && o.isSpecialTime){
+        start = timeToMin(o.zeit.von); // explicit fixed time is used exactly as given, never rounded
+        const earliest = roundToQuarter(team.cursor + travel);
+        if(start < earliest){
+          warnings.push(`Zeitkonflikt bei ${team.members.join(' + ')}: Auftrag ${o.auftragNr} sollte um ${o.zeit.von} Uhr beginnen, Team ist inkl. Fahrzeit aber erst ab ${minToTime(earliest)} Uhr frei.`);
+          start = earliest;
+        }
+      } else {
+        start = roundToQuarter(team.cursor + travel);
+      }
+      start = Math.max(start, DAY_START);
+      const end = start + dur;
+      if(end > DAY_END || team.totalMin + dur > MAX_WORK_MIN){
+        spez.push({...o, reason:`Fixe Zeitvorgabe (${o.forcedEmployee}, ab ${o.zeit?o.zeit.von:'?'} Uhr) lässt sich nicht mehr innerhalb 08:00–17:00 Uhr / 8 Std. unterbringen.`});
+        continue;
+      }
+      team.items.push({...o, start, end, forcedTime: !!(o.zeit && o.isSpecialTime), travelMin: travel});
+      team.cursor = end;
+      team.lastZone = o.zone;
+      team.totalMin += dur;
+      team.totalKm += estimateKm(travel);
+      continue;
+    }
+
+    if(o.isSpecialTime && o.zeit){
+      // fixed clock time, but no specific person required - find whoever can best make
+      // that exact slot (least travel), preferring someone who can be there ON TIME
+      let candidates = teams.filter(t=>!t.noVehicle);
+      if(candidates.length===0) candidates = teams;
+      const requiredStart = timeToMin(o.zeit.von);
+
+      const evals = candidates.map(t=>{
+        const tDur = jobDurationMinutes(o.aufwand, t, o.isEinfuehrung);
+        const travel = t.items.length ? zoneMinutes(t.lastZone, o.zone) : 0;
+        const earliest = t.items.length ? roundToQuarter(t.cursor + travel) : DAY_START;
+        const start = Math.max(requiredStart, earliest);
+        const end = start + tDur;
+        const onTime = start <= requiredStart;
+        const feasible = (t.totalMin + tDur <= MAX_WORK_MIN) && (end <= DAY_END);
+        return { t, travel, start, end, feasible, onTime, dur:tDur };
+      });
+      const feasibleEvals = evals.filter(e=>e.feasible);
+
+      if(!feasibleEvals.length){
+        spez.push({...o, reason:`Fixe Zeitvorgabe ab ${o.zeit.von} Uhr lässt sich bei niemandem mehr innerhalb 08:00–17:00 Uhr / 8 Std. unterbringen.`});
+        continue;
+      }
+      const onTimeEvals = feasibleEvals.filter(e=>e.onTime);
+      const pool = onTimeEvals.length ? onTimeEvals : feasibleEvals;
+      pool.sort((a,b)=> a.travel - b.travel);
+      const chosen = pool[0];
+
+      if(!chosen.onTime){
+        warnings.push(`Auftrag ${o.auftragNr}: feste Zeit ${o.zeit.von} Uhr konnte nicht exakt eingehalten werden – ${chosen.t.members.join(' + ')} ist inkl. Fahrzeit erst ab ${minToTime(chosen.start)} Uhr frei.`);
+      }
+      chosen.t.items.push({...o, start:chosen.start, end:chosen.end, forcedTime:true, travelMin:chosen.travel});
+      chosen.t.cursor = chosen.end;
+      chosen.t.lastZone = o.zone;
+      chosen.t.totalMin += chosen.dur;
+      chosen.t.totalKm += estimateKm(chosen.travel);
+      continue;
+    }
+
+    // forcedEmployee was given but not found in today's roster, and no fixed time either -> free assignment
+    normal.push(o);
+  }
+
+  // If a team's only scheduled work so far is a fixed-time appointment that starts
+  // well after 08:00, the time before it would otherwise sit unused (since jobs are
+  // normally only appended after the last stop). Track that gap explicitly so the
+  // normal-job pass below can also slot suitable jobs in *before* the fixed one.
+  teams.forEach(t=>{
+    if(t.items.length===1 && t.items[0].start > DAY_START + 30){
+      t.gapCursor = DAY_START;
+      t.gapLastZone = null;
+      t.gapLimit = t.items[0].start;
+      t.gapTargetZone = t.items[0].zone;
+    } else {
+      t.gapCursor = null;
+    }
+  });
+
+  // Process jobs zone-by-zone (farthest zone from home first) instead of one at a
+  // time by isolation - this keeps every job in the same zone next to each other in
+  // the processing order, so once a team picks up a zone it naturally keeps picking
+  // up the rest of that zone too (zero extra travel cost for staying), instead of
+  // different jobs in the same area getting scattered across different teams.
+  const zoneGroups = {};
+  normal.forEach(o=>{ (zoneGroups[o.zone] ||= []).push(o); });
+  // zones where a team is already positioned (e.g. from a morning fixed appointment)
+  // go first, so that team finishes the rest of its own zone before any other team
+  // gets pulled somewhere new and leaves that zone's remaining jobs to scatter
+  const activeZones = new Set(teams.filter(t=>t.items.length>0).map(t=>t.lastZone));
+  const zoneOrder = Object.keys(zoneGroups).sort((a,b)=>{
+    const aActive = activeZones.has(a) ? 1 : 0;
+    const bActive = activeZones.has(b) ? 1 : 0;
+    if(aActive !== bActive) return bActive - aActive;
+    return distanceFromHome(b) - distanceFromHome(a);
+  });
+  const jobsSorted = [];
+  zoneOrder.forEach(zone=>{
+    const jobsInZone = zoneGroups[zone].slice().sort((a,b)=> (b.aufwand||1)-(a.aufwand||1));
+    jobsSorted.push(...jobsInZone);
+  });
+
+  for(const o of jobsSorted){
+    let candidates = teams.filter(t=>!t.noVehicle);
+    if(candidates.length===0) candidates = teams;
+
+    // Prefer filling already-active teams over "switching on" an idle one from the
+    // available pool - not everyone needs to work every day; consolidating onto
+    // fewer people (while still respecting 8h/day) is the better business outcome,
+    // unless an idle team is genuinely much closer to this job.
+    const IDLE_TEAM_PENALTY = 60;
+    // A two-person team finishes each job in half the wall-clock time, so it has
+    // room for meaningfully more total work in an 8h day than a solo team - it
+    // should end up as the day's fullest tour, not sit idle after just one job.
+    // This bonus makes an under-filled pair more attractive than the raw travel
+    // distance alone would, so the day's work concentrates onto them until they're
+    // properly loaded, instead of leaving them with a single job while solo teams
+    // carry the rest.
+    const MULTI_PERSON_FILL_BONUS = 40;
+    const evals = [];
+    candidates.forEach(t=>{
+      const tDur = jobDurationMinutes(o.aufwand, t, o.isEinfuehrung);
+      const travel = t.items.length ? zoneMinutes(t.lastZone, o.zone) : 0;
+      const start = roundToQuarter(Math.max(t.cursor, DAY_START) + travel);
+      const end = start + tDur;
+      const feasible = (t.totalMin + tDur <= MAX_WORK_MIN) && (end <= DAY_END);
+      const isUnderfilledPair = t.members.length > 1 && t.items.length > 0 && t.totalMin < MAX_WORK_MIN * 0.7;
+      const cost = travel + (t.items.length===0 ? IDLE_TEAM_PENALTY : 0) - (isUnderfilledPair ? MULTI_PERSON_FILL_BONUS : 0);
+      evals.push({ t, travel, start, end, feasible, cost, gap:false, dur:tDur });
+
+      // alternative: slot this job into the free morning/gap before an existing fixed item
+      if(t.gapCursor!=null){
+        const gTravelIn = t.gapLastZone ? zoneMinutes(t.gapLastZone, o.zone) : 0;
+        const gStart = roundToQuarter(t.gapCursor + gTravelIn);
+        const gEnd = gStart + tDur;
+        const gTravelOut = zoneMinutes(o.zone, t.gapTargetZone);
+        const gFits = (gEnd + gTravelOut) <= t.gapLimit;
+        const gFeasible = gFits && (t.totalMin + tDur <= MAX_WORK_MIN);
+        evals.push({ t, travel:gTravelIn, start:gStart, end:gEnd, feasible:gFeasible, cost:gTravelIn, gap:true, dur:tDur });
+      }
+    });
+    const feasibleEvals = evals.filter(e=>e.feasible);
+
+    if(!feasibleEvals.length){
+      spez.push({...o, reason:'Passt bei niemandem mehr ohne Überschreitung von 8 Std./Tag oder 17:00 Uhr.'});
+      continue;
+    }
+    feasibleEvals.sort((a,b)=> a.cost - b.cost);
+    const chosen = feasibleEvals[0];
+
+    chosen.t.items.push({...o, start:chosen.start, end:chosen.end, forcedTime:false, travelMin:chosen.travel});
+    if(chosen.gap){
+      chosen.t.gapCursor = chosen.end;
+      chosen.t.gapLastZone = o.zone;
+    } else {
+      chosen.t.cursor = chosen.end;
+      chosen.t.lastZone = o.zone;
+    }
+    chosen.t.totalMin += chosen.dur;
+    chosen.t.totalKm += estimateKm(chosen.travel);
+    if(o.missingAufwand) warnings.push(`Auftrag ${o.auftragNr}: kein Aufwand (Std.) im Rapport gefunden – mit 1.0 Std. Platzhalter eingeplant, bitte prüfen.`);
+  }
+
+  teams.forEach(t=> t.items.sort((a,b)=>a.start-b.start));
+  teams.forEach(t=> reorderRouteByDistanceFromHome(t));
+  improveRoutesByRelocation(teams);
+  teams.forEach(t=> reorderRouteByDistanceFromHome(t));
+  return { teams, warnings, spez };
+}
+
+/* apply manual overrides (locked rows) on top of a freshly computed result */
+function applyOverrides(teams, overrides){
+  // collect all locked items across teams first
+  const locked = [];
+  teams.forEach(t=>{
+    t.items = t.items.filter(it=>{
+      const ov = overrides[it.auftragNr];
+      if(ov && ov.locked){ locked.push({item:it, ov}); return false; }
+      return true;
+    });
+  });
+  locked.forEach(({item,ov})=>{
+    const team = teams.find(t=>t.id===ov.teamId) || teams[0];
+    const start = ov.von ? timeToMin(ov.von) : item.start;
+    const end = ov.bis ? timeToMin(ov.bis) : item.end;
+    team.items.push({...item, start, end, locked:true});
+  });
+  teams.forEach(t=> t.items.sort((a,b)=>a.start-b.start));
+  return teams;
+}
+
+/* ---------------------------------------------------------------
+   FILLED PDF EXPORT (writes directly onto the original "Disposition
+   nach Datum" template, same visual style as a manually annotated dispo)
+--------------------------------------------------------------- */
+function hexToRgb01(hex){
+  const h = hex.replace('#','');
+  return {
+    r: parseInt(h.substring(0,2),16)/255,
+    g: parseInt(h.substring(2,4),16)/255,
+    b: parseInt(h.substring(4,6),16)/255
+  };
+}
+function downloadBytes(bytes, filename){
+  const blob = new Blob([bytes], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+async function generateFilledPdf(result){
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const pdfDoc = await PDFDocument.load(listFile.buf.slice(0));
+  const pages = pdfDoc.getPages();
+  const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+
+  // lookup: auftragNr -> {team, item, stopNumber}
+  const lookup = {};
+  result.teams.forEach(team=>{
+    team.items.forEach((item, idx)=>{ lookup[item.auftragNr] = { team, item, stopNumber: idx+1 }; });
+  });
+
+  const X_LEFT = 414.5, X_RIGHT = 542.6, X_SWATCH = 400, X_AUFTRAG = 42.5, X_ADDRESS = 96.5, X_TYP = 300.5;
+  const usedRowKeys = new Set();
+
+  // 1) overlay onto the existing template rows
+  for(const row of parsedListRows){
+    const match = lookup[row.auftragNr];
+    if(!match) continue;
+    usedRowKeys.add(row.auftragNr);
+    const page = pages[row.page] || pages[0];
+    const { team, item, stopNumber } = match;
+    const col = hexToRgb01(team.color);
+
+    page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
+    page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
+    page.drawText(`${stopNumber}. ${team.members.join(' + ')}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+    page.drawText(`${minToTime(item.start)} - ${minToTime(item.end)}  |  ${item.aufwand!=null ? fmtHoursShort(item.aufwand*60) : fmtHoursShort(item.end-item.start)}`,
+      { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
+  }
+
+  // 2) append rows for orders that were not part of the original template ("extra" / neu erkannt)
+  const lastPageIdx = Math.max(...parsedListRows.map(r=>r.page), 0);
+  const rowsOnLastPage = parsedListRows.filter(r=>r.page===lastPageIdx);
+  let cursorY = rowsOnLastPage.length ? Math.min(...rowsOnLastPage.map(r=>r.y)) - 26 : 700;
+  const targetPage = pages[lastPageIdx] || pages[0];
+
+  const extraItems = [];
+  result.teams.forEach(team=>{
+    team.items.forEach(item=>{ if(!usedRowKeys.has(item.auftragNr)) extraItems.push({team,item, stopNumber: lookup[item.auftragNr].stopNumber}); });
+  });
+
+  for(const {team,item,stopNumber} of extraItems){
+    const col = hexToRgb01(team.color);
+    targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
+
+    targetPage.drawText(item.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    targetPage.drawText(item.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    targetPage.drawText(item.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+
+    targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
+    targetPage.drawText(`${stopNumber}. ${team.members.join(' + ')}`, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+    targetPage.drawText(`${minToTime(item.start)} - ${minToTime(item.end)}  |  ${item.aufwand!=null ? fmtHoursShort(item.aufwand*60) : fmtHoursShort(item.end-item.start)}`,
+      { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
+
+    targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
+
+    cursorY -= 26;
+  }
+
+  // 2b) SPEZ orders that couldn't be scheduled anywhere - list clearly in red, no team
+  const spezList = result.spez || [];
+  for(const o of spezList){
+    targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
+
+    targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    targetPage.drawText(o.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+
+    targetPage.drawText('SPEZ', { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(0.7,0.1,0.1) });
+    targetPage.drawText(`${o.aufwand!=null ? o.aufwand+' Std.' : '? Std.'}`, { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(0.7,0.1,0.1) });
+    targetPage.drawText(o.reason || '', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.1,0.1) });
+
+    cursorY -= 26;
+  }
+
+  // 3) legend
+  cursorY -= 14;
+  targetPage.drawText('Legende Routen:', { x:42.5, y:cursorY, size:8, font:fontBold, color:rgb(0,0,0) });
+  cursorY -= 14;
+  const seenTeams = new Set();
+  result.teams.forEach(team=>{
+    if(team.items.length===0 || seenTeams.has(team.id)) return;
+    seenTeams.add(team.id);
+    if(cursorY < 40) return; // safety guard against running off the page
+    const col = hexToRgb01(team.color);
+    targetPage.drawRectangle({ x:42.5, y:cursorY, width:8, height:8, color:rgb(col.r,col.g,col.b) });
+    const totalH = fmtHoursShort(team.items.reduce((s,i)=>s+(i.end-i.start),0));
+    targetPage.drawText(`${team.members.join(' + ')}  (${totalH}, ~${Math.round(team.totalKm)} km)`, { x:56, y:cursorY+1, size:7.5, font:fontReg, color:rgb(0,0,0) });
+    cursorY -= 12;
+  });
+
+  const bytes = await pdfDoc.save();
+  const dateForFile = (result.targetDatum || 'dispo').replace(/\./g,'-');
+  downloadBytes(bytes, `Disposition_${dateForFile}_Touren.pdf`);
+}
+function fmtHoursShort(min){ return (min/60).toFixed(1).replace('.0','').replace('.', ',') + ' Std.'; }
+
+/* ---------------------------------------------------------------
+   RENDER RESULTS
+--------------------------------------------------------------- */
+function fmtHours(min){ return (min/60).toFixed(1).replace('.0','').replace('.', ',') + ' Std.'; }
+
+function render(result){
+  lastResult = result;
+  const { teams, warnings, spez, extrasCount, targetDatum, availableHours, disponiertHours } = result;
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+
+  document.getElementById('printTitle').textContent = 'Disposition ' + (targetDatum || '');
+  document.getElementById('printSub').textContent = 'Clean Service Scaramuzzo AG – Putzfrauenservice';
+
+  if(availableHours!=null && disponiertHours!=null){
+    const over = disponiertHours > availableHours;
+    const pct = availableHours>0 ? Math.min(100, (disponiertHours/availableHours)*100) : 0;
+    const banner = document.createElement('div'); banner.className='capacity-banner print-keep';
+    banner.innerHTML = `
+      <div class="metric"><div class="val">${availableHours.toFixed(1).replace('.0','')} Std.</div><div class="lbl">Zur Verfügung</div></div>
+      <div class="divider"></div>
+      <div class="metric"><div class="val">${disponiertHours.toFixed(1).replace('.0','')} Std.</div><div class="lbl">Disponiert</div></div>
+      <div class="bar-track"><div class="bar-fill ${over?'over':''}" style="width:${pct}%"></div></div>
+      <div class="verdict ${over?'over':'ok'}">${over ? '⚠ '+(disponiertHours-availableHours).toFixed(1).replace('.0','')+' Std. über Kapazität' : '✓ innerhalb Kapazität'}</div>
+    `;
+    container.appendChild(banner);
+  }
+
+  if(spez && spez.length){
+    const sb = document.createElement('div');
+    sb.className='card print-keep';
+    sb.style.borderColor = 'var(--danger)';
+    sb.style.background = 'var(--danger-bg)';
+    sb.innerHTML = `<h2 style="color:var(--danger);">🆘 Aufträge für SPEZ (${spez.length})</h2>
+      <div class="desc" style="color:var(--danger);">Diese Aufträge passen bei keiner Mitarbeiterin mehr ins 8-Std.-Fenster (08:00–17:00 Uhr). Bitte manuell verteilen, mit SPEZ absprechen oder zusätzliche Kraft einplanen.</div>`;
+    const table = document.createElement('table'); table.className='jobs';
+    const tbody = document.createElement('tbody');
+    spez.forEach(o=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="width:90px;font-weight:700;">${escapeHtml(o.aufwand!=null?o.aufwand+' Std.':'? Std.')}</td>
+        <td>
+          <div class="addr">${escapeHtml(o.auftragNr)} — ${escapeHtml(o.typ||'')}</div>
+          <div class="addr plz">${escapeHtml(o.address)}</div>
+          <span class="note">${escapeHtml(o.reason)}</span>
+          ${o.notes ? `<span class="note">${escapeHtml(o.notes)}</span>` : ''}
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    sb.appendChild(table);
+    container.appendChild(sb);
+  }
+
+  if(warnings.length){
+    const wb = document.createElement('div'); wb.className='warn-box';
+    wb.innerHTML = '<h3>⚠ Bitte prüfen (' + warnings.length + ')</h3><ul>' +
+      warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('') + '</ul>';
+    container.appendChild(wb);
+  }
+
+  teams.forEach(team=>{
+    if(team.items.length===0) return;
+    const card = document.createElement('div'); card.className='team-card';
+    card.style.setProperty('--card-accent', team.color);
+    const head = document.createElement('div'); head.className='team-head';
+    const totalMinForTeam = team.items.reduce((s,i)=>s+(i.end-i.start),0);
+    const overCap = totalMinForTeam > 480;
+    head.innerHTML = `
+      <span class="dot" style="background:${team.color}"></span>
+      <span class="name">${escapeHtml(team.members.join(' + '))}</span>
+      <span class="hours" style="${overCap?'color:var(--danger);font-weight:700;':''}">Total: <b>${fmtHours(totalMinForTeam)}</b>${overCap?' ⚠ über 8 Std.':''} · <b>~${Math.round(team.totalKm)} km</b></span>
+    `;
+    card.appendChild(head);
+
+    const timeline = document.createElement('div'); timeline.className='timeline';
+    const track = document.createElement('div'); track.className='track';
+    const dayStart = 8*60, dayEnd = 17*60, span = dayEnd-dayStart;
+    team.items.forEach(item=>{
+      const seg = document.createElement('div'); seg.className='seg';
+      const left = Math.max(0, (item.start-dayStart)/span*100);
+      const width = Math.max(0.6, (item.end-item.start)/span*100);
+      seg.style.left = left+'%'; seg.style.width = width+'%'; seg.style.background = team.color;
+      seg.title = `${minToTime(item.start)}–${minToTime(item.end)} · ${item.auftragNr}`;
+      track.appendChild(seg);
+    });
+    timeline.appendChild(track);
+    const ticks = document.createElement('div'); ticks.className='ticks';
+    ticks.innerHTML = '<span>08:00</span><span>12:30</span><span>17:00</span>';
+    timeline.appendChild(ticks);
+    card.appendChild(timeline);
+
+    const table = document.createElement('table'); table.className='jobs';
+    table.innerHTML = `<thead><tr>
+      <th style="width:26px">#</th><th style="width:110px">Zeit</th><th>Auftrag</th><th style="width:120px">Team</th><th style="width:30px"></th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    team.items.forEach((item, stopIdx)=>{
+      const tr = document.createElement('tr');
+
+      const tdNum = document.createElement('td');
+      tdNum.style.fontWeight='700'; tdNum.style.color=team.color;
+      tdNum.textContent = (stopIdx+1) + '.';
+
+      const tdTime = document.createElement('td');
+      const vonInput = make24hTimeInput(minToTime(item.start), item.isLocked);
+      const bisInput = make24hTimeInput(minToTime(item.end), item.isLocked);
+      bisInput.style.marginTop='4px';
+      vonInput.onchange = ()=> setOverride(item.auftragNr, team.id, vonInput.value, bisInput.value);
+      bisInput.onchange = ()=> setOverride(item.auftragNr, team.id, vonInput.value, bisInput.value);
+      tdTime.appendChild(vonInput); tdTime.appendChild(document.createElement('br')); tdTime.appendChild(bisInput);
+
+      const tdJob = document.createElement('td');
+      let badges = '';
+      if(item.aufwand!=null){
+        const isHalved = team.members.length > 1 && !item.isEinfuehrung;
+        badges += `<span class="badge" style="background:#EAF5F5;color:var(--teal-deep);">${fmtHoursShort(item.aufwand*60)}${isHalved ? ' (zu zweit: '+fmtHoursShort(item.aufwand*60/2)+' vor Ort)' : ''}</span>`;
+      }
+      if(item.isLocked) badges += `<span class="badge" style="background:#E4E9E9;color:var(--ink-soft);">🔒 Fix aus Disponentenliste</span>`;
+      if(item.forcedTime) badges += `<span class="badge fix">Fixe Zeit</span>`;
+      if(item.extra) badges += `<span class="badge extra">Neu erkannt</span>`;
+      if(item.missingAufwand) badges += `<span class="badge missing">Std. fehlt</span>`;
+      if(item.travelMin!=null && item.travelMin>0) badges += `<span class="badge" style="background:#e3f2f7;color:#0e6a8a;">🚗 ca. ${item.travelMin} Min. Fahrzeit</span>`;
+      tdJob.innerHTML = `
+        <div class="addr">${escapeHtml(item.auftragNr)} — ${escapeHtml(item.typ||'')}${item.customerName ? ' · '+escapeHtml(item.customerName) : ''}</div>
+        <div class="addr plz">${escapeHtml(item.address)}</div>
+        ${badges}
+        ${item.notes ? `<span class="note">${escapeHtml(item.notes)}</span>` : ''}
+      `;
+
+      const tdTeam = document.createElement('td');
+      if(item.isLocked){
+        tdTeam.innerHTML = `<span style="color:var(--ink-faint);font-size:12px;">nicht änderbar</span>`;
+      } else {
+        const sel = document.createElement('select'); sel.className='reassign';
+        lastResult.teams.forEach(t2=>{
+          const o = document.createElement('option'); o.value=t2.id; o.textContent=t2.members.join('+');
+          if(t2.id===team.id) o.selected=true;
+          sel.appendChild(o);
+        });
+        sel.onchange = ()=> setOverride(item.auftragNr, sel.value, vonInput.value, bisInput.value);
+        tdTeam.appendChild(sel);
+      }
+
+      const tdLock = document.createElement('td');
+      if(!item.isLocked){
+        const lockBtn = document.createElement('button');
+        const isLocked = manualOverrides[item.auftragNr] && manualOverrides[item.auftragNr].locked;
+        lockBtn.className = 'lock-toggle' + (isLocked ? ' locked':'');
+        lockBtn.textContent = isLocked ? '🔒' : '🔓';
+        lockBtn.title = isLocked ? 'Fixiert – Klick zum Lösen' : 'Manuell fixieren';
+        lockBtn.onclick = ()=>{
+          if(isLocked){ delete manualOverrides[item.auftragNr]; recompute(); }
+          else { setOverride(item.auftragNr, team.id, minToTime(item.start), minToTime(item.end)); }
+        };
+        tdLock.appendChild(lockBtn);
+      }
+
+      tr.append(tdNum, tdTime, tdJob, tdTeam, tdLock);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+    container.appendChild(card);
+  });
+
+  if(extrasCount>0){
+    const note = document.createElement('div'); note.className='status';
+    note.style.marginTop='-6px'; note.style.marginBottom='16px';
+    note.textContent = `Hinweis: ${extrasCount} Auftrag/Aufträge wurden nur im Rapport gefunden (nicht in der Disponentenliste), aber mit passendem Datum – automatisch ergänzt (siehe Badge "Neu erkannt").`;
+    container.insertBefore(note, container.firstChild.nextSibling || null);
+  }
+
+  const actions = document.createElement('div'); actions.className='actions card print-keep-actions';
+  actions.style.background='transparent'; actions.style.border='none'; actions.style.boxShadow='none'; actions.style.padding='4px 0';
+  actions.innerHTML = `
+    <button class="btn" id="pdfBtn">📄 Dispo-PDF erzeugen</button>
+    <button class="btn secondary" id="printBtn">🖨️ Drucken / als PDF speichern</button>
+    <button class="btn ghost" id="copyBtn">📋 Als Text kopieren</button>
+  `;
+  container.appendChild(actions);
+  document.getElementById('printBtn').onclick = ()=> window.print();
+  document.getElementById('copyBtn').onclick = ()=> copyAsText(result);
+  document.getElementById('pdfBtn').onclick = async ()=>{
+    const b = document.getElementById('pdfBtn');
+    const original = b.textContent;
+    b.disabled = true; b.textContent = 'Erzeuge PDF …';
+    try {
+      await generateFilledPdf(result);
+    } catch(e){
+      console.error(e);
+      alert('Fehler beim Erzeugen der PDF: ' + e.message);
+    } finally {
+      b.disabled = false; b.textContent = original;
+    }
+  };
+}
+
+function setOverride(auftragNr, teamId, von, bis){
+  manualOverrides[auftragNr] = { teamId, von, bis, locked:true };
+  recompute();
+}
+
+function make24hTimeInput(value, disabled){
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'timefield';
+  inp.value = value;
+  inp.placeholder = 'HH:MM';
+  inp.inputMode = 'numeric';
+  inp.maxLength = 5;
+  inp.style.width = '58px';
+  if(disabled) inp.disabled = true;
+  inp.addEventListener('input', ()=>{
+    let v = inp.value.replace(/[^\d]/g,'').slice(0,4);
+    if(v.length>=3) v = v.slice(0,2)+':'+v.slice(2);
+    inp.value = v;
+  });
+  return inp;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function copyAsText(result){
+  let out = `Disposition ${result.targetDatum || ''}\n\n`;
+  result.teams.forEach(team=>{
+    if(team.items.length===0) return;
+    out += `${team.members.join(' + ')}  (~${Math.round(team.totalKm)} km)\n`;
+    team.items.forEach((item, idx)=>{
+      out += `  ${idx+1}. ${minToTime(item.start)}–${minToTime(item.end)}  ${item.auftragNr}  ${item.address}${item.notes?'  ['+item.notes+']':''}\n`;
+    });
+    out += '\n';
+  });
+  navigator.clipboard.writeText(out).then(()=>{
+    const st = document.getElementById('status'); st.className='status ok'; st.textContent='Als Text in die Zwischenablage kopiert ✓';
+    setTimeout(()=>{ st.textContent=''; st.className='status'; }, 3000);
+  });
+}
+
+/* ---------------------------------------------------------------
+   MAIN FLOW
+--------------------------------------------------------------- */
+let parsedListRows = null;
+let parsedTargetDatum = null;
+let parsedRapportOrders = null;
+let mergedForReview = null;   // orders as parsed, before manual review edits (excludes "extra" orders)
+let extraOrders = [];         // orders found only in the Rapport (not in the Disponentenliste) - info only, never scheduled
+let absenceOrders = [];       // "Ferienabwesenheit"/Absenz entries - not a client job, info only, never scheduled
+let reviewEdits = {};         // auftragNr -> {customerName, address, von, bis}
+let finalizedOrders = null;   // orders after applying review edits - used for scheduling & recompute
+
+async function parseFiles(){
+  const btn = document.getElementById('parseBtn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.className='status'; status.textContent='Lese PDF-Dateien …';
+  document.getElementById('reviewCard').style.display='none';
+  document.getElementById('results').innerHTML='';
+
+  try {
+    await pdfWorkerReady;
+    const listResult = await parseDispoListPdf(listFile.buf.slice(0));
+    parsedListRows = listResult.rows;
+    parsedTargetDatum = listResult.targetDatum;
+
+    if(parsedListRows.length===0){
+      status.className='status err';
+      status.textContent='Konnte in der Disponentenliste keine Aufträge erkennen. Bitte Datei prüfen.';
+      btn.disabled=false; return;
+    }
+
+    status.textContent = `Lese ${rapportFiles.length} Rapport-Datei(en) …`;
+    let allRapportOrders = [];
+    for(const f of rapportFiles){
+      const orders = await parseRapportPdf(f.buf);
+      allRapportOrders = allRapportOrders.concat(orders);
+    }
+    parsedRapportOrders = allRapportOrders;
+
+    const merged = mergeOrders(parsedListRows, parsedRapportOrders, parsedTargetDatum, roster);
+    // Orders found only in the Rapport (not in the Disponentenliste) are informational
+    // only - they are never scheduled, just shown so nothing gets silently lost.
+    // "Ferienabwesenheit"/Absenz entries are a different kind of non-job: an internal
+    // note that the named employee is away, not a client task - also never scheduled.
+    absenceOrders = merged.filter(o=>o.isAbsence);
+    extraOrders = merged.filter(o=>o.extra && !o.isAbsence);
+    mergedForReview = merged.filter(o=>!o.extra && !o.isAbsence);
+
+    reviewEdits = {};
+    renderReviewTable(mergedForReview);
+    renderExtraInfoBox();
+    renderAbsenceInfoBox();
+    document.getElementById('reviewCard').style.display = '';
+    document.getElementById('reviewCard').scrollIntoView({behavior:'smooth', block:'start'});
+
+    status.className='status ok';
+    status.textContent = `${mergedForReview.length} Aufträge eingelesen (${parsedTargetDatum || 'Datum unbekannt'})${extraOrders.length ? ', '+extraOrders.length+' zusätzlich nur informativ erkannt' : ''}${absenceOrders.length ? ', '+absenceOrders.length+' Abwesenheit(en) erkannt (nicht verplant)' : ''}. Bitte unten prüfen, dann Dispo erstellen.`;
+  } catch(err){
+    console.error(err);
+    status.className='status err';
+    status.textContent = 'Fehler beim Verarbeiten der PDFs: ' + err.message;
+  } finally {
+    btn.disabled = !(listFile && rapportFiles.length>0);
+  }
+}
+
+function renderExtraInfoBox(){
+  const box = document.getElementById('extraInfoBox');
+  box.innerHTML = '';
+  if(!extraOrders.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'warn-box';
+  wrap.style.marginTop = '4px';
+  wrap.innerHTML = `<h3>ℹ Nur informativ erkannt – nicht in der Disponentenliste (${extraOrders.length})</h3>
+    <div style="font-size:12.5px;margin-bottom:8px;">Diese Aufträge stehen im Rapport mit passendem Datum, aber nicht in der Disponentenliste. Sie werden <b>nicht automatisch verplant</b> – bitte manuell prüfen, ob sie an diesem Tag wirklich anfallen.</div>`;
+  const table = document.createElement('table'); table.className='jobs';
+  const tbody = document.createElement('tbody');
+  extraOrders.forEach(o=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="width:90px;font-weight:700;">${escapeHtml(o.aufwand!=null?o.aufwand+' Std.':'? Std.')}</td>
+      <td>
+        <div class="addr">${escapeHtml(o.auftragNr)} — ${escapeHtml(o.typ||'')}${o.customerName?' · '+escapeHtml(o.customerName):''}</div>
+        <div class="addr plz">${escapeHtml(o.address)}</div>
+        ${o.notes ? `<span class="note">${escapeHtml(o.notes)}</span>` : ''}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  box.appendChild(wrap);
+}
+
+function renderAbsenceInfoBox(){
+  const box = document.getElementById('absenceInfoBox');
+  if(!box) return;
+  box.innerHTML = '';
+  if(!absenceOrders.length) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'warn-box';
+  wrap.style.marginTop = '4px';
+  wrap.innerHTML = `<h3>ℹ Abwesenheiten (${absenceOrders.length})</h3>
+    <div style="font-size:12.5px;margin-bottom:8px;">Das sind interne Vermerke, dass die genannte Person an diesem Tag nicht verfügbar ist (z.B. Ferien) – kein Kundenauftrag. Sie werden <b>nicht als Tourenstopp verplant</b>.</div>`;
+  const list = document.createElement('div');
+  absenceOrders.forEach(o=>{
+    const row = document.createElement('div');
+    row.style.fontSize = '13px';
+    row.style.padding = '4px 0';
+    row.innerHTML = `<b>${escapeHtml(o.preAssigned || '?')}</b> — ${escapeHtml(o.typ||'')} <span style="color:var(--ink-faint);">(${escapeHtml(o.auftragNr)})</span>`;
+    list.appendChild(row);
+  });
+  wrap.appendChild(list);
+  box.appendChild(wrap);
+}
+
+function renderReviewTable(merged){
+  const body = document.getElementById('reviewBody');
+  body.innerHTML = '';
+  merged.forEach(o=>{
+    const defaultVon = o.isSpecialTime && o.zeit ? o.zeit.von : '08:00';
+    const defaultBis = o.isSpecialTime && o.zeit ? o.zeit.bis : '17:00';
+    reviewEdits[o.auftragNr] = {
+      customerName: o.customerName || '',
+      address: o.address || '',
+      von: defaultVon,
+      bis: defaultBis
+    };
+
+    const tr = document.createElement('tr');
+
+    const tdNr = document.createElement('td');
+    tdNr.innerHTML = `<div style="font-weight:700;">${escapeHtml(o.auftragNr)}</div><div style="color:var(--ink-faint);font-size:11px;">${escapeHtml(o.typ||'')}</div>`;
+
+    const tdName = document.createElement('td');
+    const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.value = reviewEdits[o.auftragNr].customerName;
+    nameInput.oninput = ()=>{ reviewEdits[o.auftragNr].customerName = nameInput.value; };
+    tdName.appendChild(nameInput);
+
+    const tdAddr = document.createElement('td');
+    const addrInput = document.createElement('input'); addrInput.type='text'; addrInput.value = reviewEdits[o.auftragNr].address;
+    addrInput.oninput = ()=>{ reviewEdits[o.auftragNr].address = addrInput.value; };
+    tdAddr.appendChild(addrInput);
+
+    const tdStd = document.createElement('td');
+    tdStd.style.fontFamily='var(--mono)'; tdStd.style.fontWeight='600'; tdStd.style.whiteSpace='nowrap';
+    tdStd.innerHTML = o.aufwand!=null
+      ? `${fmtHoursShort(o.aufwand*60)}${o.isEinfuehrung ? '' : `<div style="font-weight:400;color:var(--ink-faint);font-size:10px;">bei 2 MA: ${fmtHoursShort(o.aufwand*60/2)}</div>`}`
+      : `<span class="badge missing">fehlt</span>`;
+
+    const tdVon = document.createElement('td');
+    const vonInput = make24hTimeInput(defaultVon, false);
+    vonInput.oninput = ()=>{ reviewEdits[o.auftragNr].von = vonInput.value; };
+    tdVon.appendChild(vonInput);
+
+    const tdBis = document.createElement('td');
+    const bisInput = make24hTimeInput(defaultBis, false);
+    bisInput.oninput = ()=>{ reviewEdits[o.auftragNr].bis = bisInput.value; };
+    tdBis.appendChild(bisInput);
+
+    tr.append(tdNr, tdName, tdAddr, tdStd, tdVon, tdBis);
+    body.appendChild(tr);
+  });
+}
+
+// Applies the (possibly edited) review data on top of the parsed orders - a narrowed
+// von/bis window (anything other than the full 08:00-17:00 default) is treated as a
+// hard fixed-time requirement, exactly like a time detected automatically from a Rapport.
+function applyReviewEdits(merged){
+  return merged.map(o=>{
+    const edit = reviewEdits[o.auftragNr];
+    if(!edit) return o;
+    const von = /^\d{2}:\d{2}$/.test(edit.von) ? edit.von : '08:00';
+    const bis = /^\d{2}:\d{2}$/.test(edit.bis) ? edit.bis : '17:00';
+    const isNarrowed = !(von==='08:00' && bis==='17:00');
+    return {
+      ...o,
+      customerName: edit.customerName || o.customerName,
+      address: edit.address || o.address,
+      zeit: isNarrowed ? { von, bis } : o.zeit,
+      isSpecialTime: isNarrowed ? true : o.isSpecialTime,
+      zeitOutsideWorkday: false
+    };
+  });
+}
+
+function runScheduling(){
+  const status = document.getElementById('status');
+  finalizedOrders = applyReviewEdits(mergedForReview);
+  const extrasCount = finalizedOrders.filter(o=>o.extra).length;
+
+  const { teams, warnings, spez } = scheduleWithPreAssigned(finalizedOrders, roster);
+  applyOverrides(teams, manualOverrides);
+
+  const availableHours = roster.length * 8; // every person (with or without vehicle) has an 8h workday of capacity
+  const disponiertHours = finalizedOrders.reduce((s,o)=> s + (o.aufwand!=null ? o.aufwand : 1), 0);
+
+  render({ teams, warnings, spez, extrasCount, targetDatum: parsedTargetDatum, mergedOrders: finalizedOrders, availableHours, disponiertHours });
+  status.className='status ok';
+  status.textContent = `Dispo erstellt: ${finalizedOrders.length} Aufträge, ${parsedTargetDatum || 'Datum unbekannt'}.`;
+  document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function recompute(){
+  if(!finalizedOrders) return;
+  const extrasCount = finalizedOrders.filter(o=>o.extra).length;
+  const { teams, warnings, spez } = scheduleWithPreAssigned(finalizedOrders, roster);
+  applyOverrides(teams, manualOverrides);
+  const availableHours = roster.length * 8; // every person (with or without vehicle) has an 8h workday of capacity
+  const disponiertHours = finalizedOrders.reduce((s,o)=> s + (o.aufwand!=null ? o.aufwand : 1), 0);
+  render({ teams, warnings, spez, extrasCount, targetDatum: parsedTargetDatum, mergedOrders: finalizedOrders, availableHours, disponiertHours });
+}
+
+document.getElementById('parseBtn').addEventListener('click', parseFiles);
+document.getElementById('generateBtn').addEventListener('click', runScheduling);
+</script>
+</body>
+</html>
