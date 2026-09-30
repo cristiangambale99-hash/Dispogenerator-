@@ -1781,10 +1781,15 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
   if(typeof L === 'undefined'){ statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.'; return; }
 
   if(!tourMapInstance){
-    tourMapInstance = L.map('tourMapEl');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap-Mitwirkende'
+    tourMapInstance = L.map('tourMapEl', { zoomControl:false });
+    L.control.zoom({ position:'bottomright' }).addTo(tourMapInstance);
+    /* CARTO Voyager statt Standard-OSM-Kacheln: gleiche freie OpenStreetMap-Daten,
+       aber aufgeräumte, helle Kartografie (dezente Flächen/Strassenfarben, ohne die
+       vielen POI-Symbole des Standardstils) - optisch deutlich näher an Google Maps. */
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      subdomains: 'abcd',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(tourMapInstance);
   }
   setTimeout(()=> tourMapInstance.invalidateSize(), 50);
@@ -1810,9 +1815,12 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
 
   if(points.length>0){
     if(connectRoute){
-      L.polyline(points.map(p=>[p.lat,p.lng]), { color: colorFn(items[0],0), weight: 3, opacity:.7 }).addTo(tourMapLayer);
+      const latlngs = points.map(p=>[p.lat,p.lng]);
+      /* Route "gecast" wie bei Google Maps: weisse Kontur + kräftige Farblinie obenauf */
+      L.polyline(latlngs, { color:'#ffffff', weight:7, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
+      L.polyline(latlngs, { color: colorFn(items[0],0), weight:4.5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
     }
-    tourMapInstance.fitBounds(points.map(p=>[p.lat,p.lng]), { padding:[30,30] });
+    tourMapInstance.fitBounds(points.map(p=>[p.lat,p.lng]), { padding:[40,40] });
   }
   statusEl.textContent = failed>0
     ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).`
@@ -1827,7 +1835,7 @@ async function openTourMap(tourId){
   await showMapModal(`${t.name} · ${items.length} Stopp${items.length>1?'s':''}`, items, {
     connectRoute: true,
     colorFn: ()=> t.color,
-    labelFn: (o,i,color)=> `<div style="background:${color};color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35)">${i+1}</div>`,
+    labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font:700 12.5px sans-serif;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.45)">${i+1}</div>`,
     popupFn: (o,i)=> `<b>${i+1}. ${o.customerName || o.address.split(',')[0]}</b><br>${o.address}${o.assignedTime ? '<br>'+o.assignedTime+' Uhr' : ''}`
   });
 }
@@ -1841,7 +1849,7 @@ async function openAllOrdersMap(){
   await showMapModal(`Alle Aufträge · ${items.length}`, items, {
     connectRoute: false,
     colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#98a3a6'; },
-    labelFn: (o,i,color)=> `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};width:18px;height:18px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
     popupFn: (o)=>{
       const t = tours.find(x=>x.id===o.assignedTourId);
       return `<b>${o.auftragNr}</b><br>${o.address}<br>${t ? t.name+(o.assignedTime?' · '+o.assignedTime+' Uhr':'') : '<span style="color:#b8453c">nicht zugeteilt</span>'}`;
