@@ -1243,11 +1243,17 @@ async function parseDispoListPdf(buf){
     const lineYs = Object.keys(buckets).map(Number).sort((a,b)=>b-a);
     for(const y of lineYs){
       const rowItems = buckets[y].sort((a,b)=>a.x-b.x);
-      if(!/^\d{6,8}$/.test(rowItems[0].str.trim())) continue;
       const cols = [[],[],[],[]];
       for(const it of rowItems) cols[classifyListColumn(it.x)].push(it.str);
+      /* Auftragsnummer über die ganze Spalte (x<80) zusammensetzen statt nur das
+         erste PDF-Textfragment zu prüfen - manche PDF-Exporte zerlegen eine
+         durchgehende Zahl in mehrere Textläufe (z. B. "260" + "1308"), wodurch
+         eine Zeile sonst fälschlich als "kein Auftrag" übersprungen und der
+         Auftrag NIE übernommen würde. */
+      const auftragNrRaw = cols[0].map(s=>s.trim()).join('').replace(/\s+/g,'');
+      if(!/^\d{4,10}$/.test(auftragNrRaw)) continue;
       rows.push({
-        auftragNr: cols[0].join(' ').trim(),
+        auftragNr: auftragNrRaw,
         address: cols[1].join(' ').trim(),
         typ: cols[2].join(' ').trim(),
         page: p-1,
@@ -1770,7 +1776,31 @@ document.getElementById('mapScrim').addEventListener('click', closeTourMap);
    aller Aufträge - geokodiert die übergebenen Aufträge und zeichnet sie
    gemäss colorFn/labelFn/popupFn; connectRoute verbindet die Stopps (nur bei
    einer einzelnen, geordneten Tour sinnvoll). */
-async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute }){
+/* Holt eine echte, strassenbasierte Route (OSRM, kostenlos, kein Key nötig)
+   inkl. Gesamtdistanz/-dauer - für den "Wegaufwand" (Fahrzeit zwischen den
+   Stopps, zusätzlich zur reinen Putzzeit) und eine Linie, die wie bei Google
+   Maps den Strassen folgt statt Luftlinien zwischen den Punkten zu ziehen. */
+async function fetchRoute(points){
+  if(points.length<2) return null;
+  const coords = points.map(p=>`${p.lng},${p.lat}`).join(';');
+  const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+  if(!res.ok) throw new Error('Routing fehlgeschlagen');
+  const data = await res.json();
+  if(!data.routes || !data.routes.length) return null;
+  const r = data.routes[0];
+  return {
+    distanceKm: r.distance/1000,
+    durationMin: r.duration/60,
+    coords: r.geometry.coordinates.map(c=>[c[1], c[0]])
+  };
+}
+function fmtDuration(min){
+  const h = Math.floor(min/60);
+  const m = Math.round(min%60);
+  return h>0 ? `${h} Std. ${m} Min.` : `${m} Min.`;
+}
+
+async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute, routeColor }){
   document.getElementById('mapModalTitle').textContent = title;
   const statusEl = document.getElementById('mapModalStatus');
   statusEl.textContent = 'Adressen werden geladen …';
@@ -1816,18 +1846,31 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
     }
   }
 
+  let routeSummaryText = '';
   if(points.length>0){
+    let boundsCoords = points.map(p=>[p.lat,p.lng]);
     if(connectRoute){
-      const latlngs = points.map(p=>[p.lat,p.lng]);
-      /* Route "gecast" wie bei Google Maps: weisse Kontur + kräftige Farblinie obenauf */
-      L.polyline(latlngs, { color:'#ffffff', weight:7, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
-      L.polyline(latlngs, { color: colorFn(items[0],0), weight:4.5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
+      statusEl.textContent = `${points.length} Stopps auf der Karte · Route wird berechnet …`;
+      const lineColor = routeColor || colorFn(items[0],0);
+      let route = null;
+      try{ route = await fetchRoute(points); }catch(e){ route = null; }
+      if(route && route.coords && route.coords.length){
+        /* Route "gecast" wie bei Google Maps: weisse Kontur + kräftige Farblinie obenauf,
+           folgt den echten Strassen statt Luftlinien zwischen den Stopps zu ziehen. */
+        L.polyline(route.coords, { color:'#ffffff', weight:7, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
+        L.polyline(route.coords, { color:lineColor, weight:4.5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
+        boundsCoords = route.coords;
+        routeSummaryText = ` · Wegaufwand: ca. ${fmtDuration(route.durationMin)}, ${route.distanceKm.toFixed(1)} km`;
+      } else {
+        /* Routing nicht erreichbar - zumindest die Stopps in Reihenfolge verbinden */
+        L.polyline(points.map(p=>[p.lat,p.lng]), { color: lineColor, weight:3, opacity:.65, dashArray:'4,10', lineCap:'round' }).addTo(tourMapLayer);
+      }
     }
-    tourMapInstance.fitBounds(points.map(p=>[p.lat,p.lng]), { padding:[40,40] });
+    tourMapInstance.fitBounds(boundsCoords, { padding:[40,40] });
   }
   statusEl.textContent = failed>0
-    ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).`
-    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte${connectRoute?', in Reihenfolge verbunden':''}.`;
+    ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).${routeSummaryText}`
+    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte${connectRoute?', verbunden':''}.${routeSummaryText}`;
 }
 
 async function openTourMap(tourId){
@@ -1850,8 +1893,9 @@ async function openAllOrdersMap(){
   const items = filteredOrders();
   if(items.length===0){ toast('Keine Aufträge vorhanden', 'warning'); return; }
   await showMapModal(`Alle Aufträge · ${items.length}`, items, {
-    connectRoute: false,
-    colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#98a3a6'; },
+    connectRoute: true,
+    routeColor: '#37474F',
+    colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#37474F'; },
     labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};width:18px;height:18px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
     popupFn: (o)=>{
       const t = tours.find(x=>x.id===o.assignedTourId);
