@@ -761,6 +761,52 @@ function mergeOrders(listRows, rapportOrders, targetDatum){
   return result;
 }
 
+/* Extrahiert die reinen Namen aus einer Original-Disposition-Zelle wie
+   "3. Cristina + Ginett - ________________________" (Nummerierung und die
+   leere Unterschriftslinie sind kein Namensbestandteil). */
+function extractPreAssignedNames(raw){
+  if(!raw) return [];
+  let s = raw.replace(/^\d+\.\s*/, '');
+  s = s.split(/[-–]/)[0];
+  s = s.replace(/_+/g, ' ');
+  return s.split(/[\s/,+&]+/).map(t=>t.trim().toLowerCase()).filter(t=> t.length>1 && !/^\d+$/.test(t));
+}
+
+/* Ordnet einen auf der Original-Disposition bereits eingetragenen Namen einer
+   bestehenden Tour zu. Bei mehreren Namen (2er-Team) wird nur übernommen, wenn
+   es exakt diese Tour bereits gibt - sonst würde z. B. "Cristina + Ginett"
+   fälschlich nur "Cristina" (1 Person, falsche Dauer) zugeteilt. */
+function tourForPreAssignedName(raw, tourList){
+  const names = extractPreAssignedNames(raw);
+  if(names.length===0) return null;
+  let hit = tourList.find(t=>{
+    const tTokens = t.name.toLowerCase().split(/[\s/,+&]+/).filter(Boolean);
+    return tTokens.length===names.length && tTokens.every(tt=> names.includes(tt));
+  });
+  if(hit) return hit;
+  if(names.length===1){
+    hit = tourList.find(t=> t.name.toLowerCase().split(/[\s/,+&]+/).filter(Boolean).includes(names[0]));
+    if(hit) return hit;
+  }
+  return null;
+}
+
+/* Übernimmt Aufträge, die auf der Original-Disposition bereits mit einer Person
+   angezeigt werden, als Entwurf-Zuteilung - der Disponent muss sie nicht neu
+   erfassen und kann sie bei Bedarf einfach anpassen/umverteilen. */
+function applyPreAssignedDrafts(orderList, tourList){
+  let count = 0;
+  orderList.forEach(o=>{
+    if(o.assignedTourId || !o.preAssigned) return;
+    const t = tourForPreAssignedName(o.preAssigned, tourList);
+    if(!t) return;
+    o.assignedTourId = t.id;
+    o.assignedTime = (o.zeit && o.zeit.von) || '08:00';
+    count++;
+  });
+  return count;
+}
+
 /* Vorschlag (informativ) - wer laut Notizen/Aduna diesen Auftrag normalerweise übernimmt.
    Entscheidet NICHTS, der Disponent wählt die Tour selbst. */
 function suggestedEmployee(order, tours){
@@ -1072,9 +1118,10 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     const merged = mergeOrders(parsedListRows, allRapportOrders, targetDatum);
     absenceOrders = merged.filter(o=>o.isAbsence);
     orders = merged.filter(o=>!o.isAbsence);
+    const draftCount = applyPreAssignedDrafts(orders, tours);
 
-    statusEl.textContent = `${orders.length} Aufträge eingelesen${targetDatum ? ' für ' + targetDatum : ''}.`;
-    toast('Aufträge eingelesen', 'check');
+    statusEl.textContent = `${orders.length} Aufträge eingelesen${targetDatum ? ' für ' + targetDatum : ''}${draftCount>0 ? ' · '+draftCount+' bereits als Entwurf zugeteilt (aus Disposition übernommen)' : ''}.`;
+    toast(draftCount>0 ? `Aufträge eingelesen · ${draftCount} als Entwurf übernommen` : 'Aufträge eingelesen', 'check');
     document.getElementById('dashResults').hidden = false;
     document.getElementById('btnGoList').hidden = false;
     document.getElementById('btnSaveDay').hidden = false;
@@ -1435,6 +1482,19 @@ async function generateFilledPdf(){
       { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
   }
 
+  /* Ferienabwesenheiten auf der jeweiligen Zeile deutlich markieren, damit sie
+     im erstellten PDF genauso sichtbar sind wie zugeteilte Aufträge. */
+  const absenceByNr = {}; absenceOrders.forEach(o=> absenceByNr[o.auftragNr]=o);
+  for(const row of parsedListRows){
+    const o = absenceByNr[row.auftragNr];
+    if(!o) continue;
+    const page = pages[row.page] || pages[0];
+    page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
+    page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(0.55,0.55,0.55) });
+    page.drawText('FERIEN', { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(0.42,0.42,0.42) });
+    if(o.preAssigned) page.drawText(o.preAssigned, { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(0.42,0.42,0.42) });
+  }
+
   const lastPageIdx = parsedListRows.length ? Math.max(...parsedListRows.map(r=>r.page)) : 0;
   const rowsOnLastPage = parsedListRows.filter(r=>r.page===lastPageIdx);
   let cursorY = rowsOnLastPage.length ? Math.min(...rowsOnLastPage.map(r=>r.y)) - 26 : 700;
@@ -1484,6 +1544,20 @@ async function generateFilledPdf(){
     targetPage.drawText(`${t.name}  (${fmtHoursShort(totalMin)})`, { x:56, y:cursorY+1, size:7.5, font:fontReg, color:rgb(0,0,0) });
     cursorY -= 12;
   });
+
+  if(absenceOrders.length>0){
+    cursorY -= 8;
+    if(cursorY < 40) cursorY = 40;
+    targetPage.drawText('Ferien / Abwesenheiten heute:', { x:42.5, y:cursorY, size:8, font:fontBold, color:rgb(0,0,0) });
+    cursorY -= 14;
+    absenceOrders.forEach(o=>{
+      if(cursorY < 30) return;
+      const label = [o.preAssigned, o.typ].filter(Boolean).join(' – ') || o.auftragNr;
+      targetPage.drawRectangle({ x:42.5, y:cursorY, width:8, height:8, color:rgb(0.55,0.55,0.55) });
+      targetPage.drawText(label, { x:56, y:cursorY+1, size:7.5, font:fontReg, color:rgb(0.35,0.35,0.35) });
+      cursorY -= 12;
+    });
+  }
 
   const bytes = await pdfDoc.save();
   const dateForFile = (targetDatum || 'dispo').replace(/\./g,'-');
