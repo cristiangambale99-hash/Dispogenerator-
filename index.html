@@ -982,6 +982,7 @@ td .name{font-weight:600}
         <div class="toolbar">
           <div class="search"><svg><use href="#i-search"/></svg><input type="text" id="searchInput" placeholder="Auftragsnr., Adresse oder Kunde suchen …"></div>
           <button class="chip" id="filterOpen" aria-pressed="false">Nur offene</button>
+          <button class="btn btn-s" id="btnOrdersMap"><svg><use href="#i-route"/></svg>Kartenansicht</button>
         </div>
         <div class="card">
           <div class="tablewrap">
@@ -1765,13 +1766,12 @@ document.getElementById('mapScrim').addEventListener('click', closeTourMap);
 /* Zeigt die komplette Tour mit allen Stopps direkt als Karte in der App an
    (OpenStreetMap/Leaflet, kein API-Key nötig) - Adressen werden client-seitig
    via Nominatim geokodiert und lokal zwischengespeichert. */
-async function openTourMap(tourId){
-  const t = tours.find(x=>x.id===tourId);
-  if(!t) return;
-  const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
-  if(items.length===0){ toast('Keine Adressen für diese Tour', 'warning'); return; }
-
-  document.getElementById('mapModalTitle').textContent = `${t.name} · ${items.length} Stopp${items.length>1?'s':''}`;
+/* Gemeinsame Kartenlogik für die Touren-Detailkarte und die Gesamtübersicht
+   aller Aufträge - geokodiert die übergebenen Aufträge und zeichnet sie
+   gemäss colorFn/labelFn/popupFn; connectRoute verbindet die Stopps (nur bei
+   einer einzelnen, geordneten Tour sinnvoll). */
+async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute }){
+  document.getElementById('mapModalTitle').textContent = title;
   const statusEl = document.getElementById('mapModalStatus');
   statusEl.textContent = 'Adressen werden geladen …';
   document.getElementById('mapModal').classList.add('open');
@@ -1800,26 +1800,55 @@ async function openTourMap(tourId){
     try{ pt = await geocodeAddress(o.address); }catch(e){ pt = null; }
     if(pt){
       points.push(pt);
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="background:${t.color};color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35)">${i+1}</div>`,
-        iconSize:[26,26], iconAnchor:[13,13]
-      });
-      L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer)
-        .bindPopup(`<b>${i+1}. ${o.customerName || o.address.split(',')[0]}</b><br>${o.address}${o.assignedTime ? '<br>'+o.assignedTime+' Uhr' : ''}`);
+      const color = colorFn(o,i);
+      const icon = L.divIcon({ className:'', html: labelFn(o,i,color), iconSize:[26,26], iconAnchor:[13,13] });
+      L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer).bindPopup(popupFn(o,i));
     } else {
       failed++;
     }
   }
 
   if(points.length>0){
-    L.polyline(points.map(p=>[p.lat,p.lng]), { color: t.color, weight: 3, opacity:.7 }).addTo(tourMapLayer);
+    if(connectRoute){
+      L.polyline(points.map(p=>[p.lat,p.lng]), { color: colorFn(items[0],0), weight: 3, opacity:.7 }).addTo(tourMapLayer);
+    }
     tourMapInstance.fitBounds(points.map(p=>[p.lat,p.lng]), { padding:[30,30] });
   }
   statusEl.textContent = failed>0
     ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).`
-    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte, in Reihenfolge verbunden.`;
+    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte${connectRoute?', in Reihenfolge verbunden':''}.`;
 }
+
+async function openTourMap(tourId){
+  const t = tours.find(x=>x.id===tourId);
+  if(!t) return;
+  const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+  if(items.length===0){ toast('Keine Adressen für diese Tour', 'warning'); return; }
+  await showMapModal(`${t.name} · ${items.length} Stopp${items.length>1?'s':''}`, items, {
+    connectRoute: true,
+    colorFn: ()=> t.color,
+    labelFn: (o,i,color)=> `<div style="background:${color};color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35)">${i+1}</div>`,
+    popupFn: (o,i)=> `<b>${i+1}. ${o.customerName || o.address.split(',')[0]}</b><br>${o.address}${o.assignedTime ? '<br>'+o.assignedTime+' Uhr' : ''}`
+  });
+}
+
+/* Übersichtskarte über ALLE (aktuell gefilterten) Aufträge, farblich nach
+   zugeteilter Tour - damit der Disponent auf einen Blick sieht, wo sich die
+   Aufträge räumlich befinden, ohne sie einzeln in Google Maps einzutragen. */
+async function openAllOrdersMap(){
+  const items = filteredOrders();
+  if(items.length===0){ toast('Keine Aufträge vorhanden', 'warning'); return; }
+  await showMapModal(`Alle Aufträge · ${items.length}`, items, {
+    connectRoute: false,
+    colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#98a3a6'; },
+    labelFn: (o,i,color)=> `<div style="background:${color};width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`,
+    popupFn: (o)=>{
+      const t = tours.find(x=>x.id===o.assignedTourId);
+      return `<b>${o.auftragNr}</b><br>${o.address}<br>${t ? t.name+(o.assignedTime?' · '+o.assignedTime+' Uhr':'') : '<span style="color:#b8453c">nicht zugeteilt</span>'}`;
+    }
+  });
+}
+document.getElementById('btnOrdersMap').addEventListener('click', openAllOrdersMap);
 
 function buildMapsRouteUrl(items){
   const addrs = items.map(o=> encodeURIComponent(o.address)).filter(Boolean);
