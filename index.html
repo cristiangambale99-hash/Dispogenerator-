@@ -8,6 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 /* ===== Clean Service App-Layout v1 (unverändert aus Skill übernommen) ===== */
 :root{
@@ -109,6 +111,13 @@ td .name{font-weight:600}
 .icon-btn:hover{background:var(--cs-bg-soft)}
 .icon-btn svg{width:22px;height:22px}
 .panel-b{padding:18px 22px;overflow-y:auto;flex:1}
+.mapmodal{position:fixed;top:4vh;left:50%;width:min(920px,94vw);height:90vh;background:var(--cs-surface);border-radius:var(--cs-radius-lg);box-shadow:var(--cs-shadow);z-index:32;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;visibility:hidden;transform:translate(-50%,-8px);transition:opacity .22s ease-out,transform .22s ease-out,visibility 0s .22s}
+.mapmodal.open{opacity:1;pointer-events:auto;visibility:visible;transform:translate(-50%,0);transition-delay:0s}
+.mapmodal-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid var(--cs-line);background:var(--cs-head);flex:0 0 auto}
+.mapmodal-h h2{font-size:19px;font-weight:600;font-family:var(--cs-font)}
+#tourMapEl{flex:1;min-height:0}
+#mapModalStatus{padding:8px 20px;flex:0 0 auto;border-top:1px solid var(--cs-line)}
+@media (max-width:640px){ .mapmodal{top:0;left:0;transform:none;width:100vw;height:100vh;border-radius:0} .mapmodal.open{transform:none} }
 .dl{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;font-size:14.5px}
 .dl dt{color:var(--cs-fg-2)} .dl dd{margin:0;font-weight:500}
 .sec-t{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:600;margin:22px 0 10px}
@@ -385,6 +394,16 @@ td .name{font-weight:600}
   </div>
   <div class="panel-b" id="panelBody"></div>
 </aside>
+
+<div class="scrim" id="mapScrim"></div>
+<div class="mapmodal" id="mapModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="mapModalTitle">
+  <div class="mapmodal-h">
+    <div><div class="eyebrow">Tour auf der Karte</div><h2 id="mapModalTitle">–</h2></div>
+    <button class="icon-btn" id="mapModalClose" aria-label="Schliessen"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div id="tourMapEl"></div>
+  <div id="mapModalStatus" class="muted" style="font-size:12.5px"></div>
+</div>
 
 <div class="scrim" id="dscrim"></div>
 <nav class="drawer" aria-label="Menü" aria-hidden="true">
@@ -977,18 +996,21 @@ function scheduleDaySave(){
 
 function listSavedDays(){
   const days = [];
-  for(let i=0;i<localStorage.length;i++){
-    const k = localStorage.key(i);
-    if(k && k.startsWith(DAY_PREFIX)){
-      try{ const d = JSON.parse(localStorage.getItem(k)); if(d && d.targetDatum) days.push(d); }catch(e){}
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith(DAY_PREFIX)){
+        try{ const d = JSON.parse(localStorage.getItem(k)); if(d && d.targetDatum) days.push(d); }catch(e){}
+      }
     }
-  }
+  }catch(e){ /* Browser-Speicher nicht verfügbar (z. B. Vorschau-Sandbox) - keine gespeicherten Tage anzeigen */ }
   days.sort((a,b)=> (b.savedAt||'').localeCompare(a.savedAt||''));
   return days;
 }
 
 function loadDayState(datum){
-  const raw = localStorage.getItem(dayKey(datum));
+  let raw = null;
+  try{ raw = localStorage.getItem(dayKey(datum)); }catch(e){}
   if(!raw) return;
   try{
     const data = JSON.parse(raw);
@@ -1008,7 +1030,7 @@ function loadDayState(datum){
   }catch(e){ console.error(e); toast('Laden fehlgeschlagen', 'error'); }
 }
 function deleteDayState(datum){
-  localStorage.removeItem(dayKey(datum));
+  try{ localStorage.removeItem(dayKey(datum)); }catch(e){}
   renderSavedDays();
 }
 function fmtSavedAt(iso){
@@ -1047,6 +1069,94 @@ function renderSavedDays(){
    der zugeteilten Reihenfolge – der Disponent muss nichts von Hand
    eintragen.
 ===================================================================== */
+let geocodeCache = (()=>{ try{ const raw = localStorage.getItem('cs-dispo-geocode'); return raw ? JSON.parse(raw) : {}; }catch(e){ return {}; } })();
+function saveGeocodeCache(){ try{ localStorage.setItem('cs-dispo-geocode', JSON.stringify(geocodeCache)); }catch(e){} }
+let lastGeocodeAt = 0;
+async function geocodeAddress(address){
+  const key = address.trim().toLowerCase();
+  if(key in geocodeCache) return geocodeCache[key];
+  const wait = 1000 - (Date.now() - lastGeocodeAt);
+  if(wait > 0) await new Promise(r=> setTimeout(r, wait));
+  lastGeocodeAt = Date.now();
+  const q = encodeURIComponent(address + ', Schweiz');
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ch&q=${q}`);
+  if(!res.ok) throw new Error('Geocoding fehlgeschlagen');
+  const data = await res.json();
+  const point = data.length ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
+  geocodeCache[key] = point;
+  saveGeocodeCache();
+  return point;
+}
+
+let tourMapInstance = null;
+let tourMapLayer = null;
+function closeTourMap(){
+  document.getElementById('mapModal').classList.remove('open');
+  document.getElementById('mapModal').setAttribute('aria-hidden','true');
+  document.getElementById('mapScrim').classList.remove('open');
+}
+document.getElementById('mapModalClose').addEventListener('click', closeTourMap);
+document.getElementById('mapScrim').addEventListener('click', closeTourMap);
+
+/* Zeigt die komplette Tour mit allen Stopps direkt als Karte in der App an
+   (OpenStreetMap/Leaflet, kein API-Key nötig) - Adressen werden client-seitig
+   via Nominatim geokodiert und lokal zwischengespeichert. */
+async function openTourMap(tourId){
+  const t = tours.find(x=>x.id===tourId);
+  if(!t) return;
+  const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+  if(items.length===0){ toast('Keine Adressen für diese Tour', 'warning'); return; }
+
+  document.getElementById('mapModalTitle').textContent = `${t.name} · ${items.length} Stopp${items.length>1?'s':''}`;
+  const statusEl = document.getElementById('mapModalStatus');
+  statusEl.textContent = 'Adressen werden geladen …';
+  document.getElementById('mapModal').classList.add('open');
+  document.getElementById('mapModal').setAttribute('aria-hidden','false');
+  document.getElementById('mapScrim').classList.add('open');
+
+  if(typeof L === 'undefined'){ statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.'; return; }
+
+  if(!tourMapInstance){
+    tourMapInstance = L.map('tourMapEl');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap-Mitwirkende'
+    }).addTo(tourMapInstance);
+  }
+  setTimeout(()=> tourMapInstance.invalidateSize(), 50);
+  if(tourMapLayer) tourMapLayer.remove();
+  tourMapLayer = L.layerGroup().addTo(tourMapInstance);
+
+  const points = [];
+  let failed = 0;
+  for(let i=0;i<items.length;i++){
+    const o = items[i];
+    statusEl.textContent = `Adresse ${i+1} von ${items.length} wird geladen …`;
+    let pt = null;
+    try{ pt = await geocodeAddress(o.address); }catch(e){ pt = null; }
+    if(pt){
+      points.push(pt);
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="background:${t.color};color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35)">${i+1}</div>`,
+        iconSize:[26,26], iconAnchor:[13,13]
+      });
+      L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer)
+        .bindPopup(`<b>${i+1}. ${o.customerName || o.address.split(',')[0]}</b><br>${o.address}${o.assignedTime ? '<br>'+o.assignedTime+' Uhr' : ''}`);
+    } else {
+      failed++;
+    }
+  }
+
+  if(points.length>0){
+    L.polyline(points.map(p=>[p.lat,p.lng]), { color: t.color, weight: 3, opacity:.7 }).addTo(tourMapLayer);
+    tourMapInstance.fitBounds(points.map(p=>[p.lat,p.lng]), { padding:[30,30] });
+  }
+  statusEl.textContent = failed>0
+    ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).`
+    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte, in Reihenfolge verbunden.`;
+}
+
 function buildMapsRouteUrl(items){
   const addrs = items.map(o=> encodeURIComponent(o.address)).filter(Boolean);
   if(addrs.length===0) return null;
@@ -1344,7 +1454,7 @@ function openOrderPanel(auftragNr){
 function closePanel(){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); scrim.classList.remove('open'); selectedAuftragNr=null; }
 document.getElementById('panelClose').addEventListener('click', closePanel);
 scrim.addEventListener('click', closePanel);
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePanel(); closeDrawer(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePanel(); closeDrawer(); closeTourMap(); } });
 
 /* =====================================================================
    TOUREN-ANSICHT
@@ -1382,6 +1492,7 @@ function renderTouren(){
         <h2><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="badge ${over8h?'b-warn':'b-neutral'}">${fmtHoursShort(totalMin)}${over8h?' · über 8 Std.':''}</span>
+          ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-map="${t.id}"><svg><use href="#i-route"/></svg>Karte anzeigen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-route="${t.id}"><svg><use href="#i-route"/></svg>Route öffnen</button>` : ''}
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
@@ -1402,6 +1513,7 @@ function renderTouren(){
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
     if(o){ o.assignedTourId=null; o.assignedTime=null; renderAll(); toast('Zuteilung entfernt','check'); }
   }));
+  wrap.querySelectorAll('[data-map]').forEach(btn=> btn.addEventListener('click', ()=> openTourMap(btn.dataset.map)));
   wrap.querySelectorAll('[data-route]').forEach(btn=> btn.addEventListener('click', ()=>{
     const t = tours.find(x=>x.id===btn.dataset.route);
     if(!t) return;
