@@ -844,6 +844,7 @@ td .name{font-weight:600}
 @media (max-width:820px){.grid2{grid-template-columns:1fr}}
 .tourpick{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .tourdot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.tourcard.drop-hover{outline:2px dashed var(--cs-brand-text);outline-offset:-2px;background:var(--cs-mint-bg)}
 .stat-row{display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0}
 .toursec{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .tourcard{width:100%}
@@ -1006,7 +1007,7 @@ td .name{font-weight:600}
       <div class="phead">
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
-          <div><div class="eyebrow">Putzfrauenservice · <span id="tourenDatum">Dispo</span></div><h1>TOUREN</h1><p class="sub">Alle zugeteilten Stopps je Tour, nach Uhrzeit sortiert.</p></div>
+          <div><div class="eyebrow">Putzfrauenservice · <span id="tourenDatum">Dispo</span></div><h1>TOUREN</h1><p class="sub">Alle zugeteilten Stopps je Tour, nach Uhrzeit sortiert. Tipp: Tournamen auf eine andere Tour ziehen, um automatisch eine 2er-Tour daraus zu machen.</p></div>
         </div>
       </div>
       <div class="content">
@@ -1609,6 +1610,33 @@ function removeTour(id){
   tours = tours.filter(t=>t.id!==id);
   saveTours();
   renderAll();
+}
+
+/* Eine Tour auf eine andere ziehen (Touren-Seite) -> automatisch eine
+   2er-Tour daraus machen: Name wird kombiniert, alle bereits zugeteilten
+   Aufträge beider Touren wandern auf die neue 2er-Tour, die gezogene Tour
+   verschwindet. Die Farbe der Zieltour (auf die gezogen wurde) bleibt. */
+function mergeTours(sourceId, targetId){
+  if(!sourceId || !targetId || sourceId===targetId) return;
+  const source = tours.find(x=>x.id===sourceId);
+  const target = tours.find(x=>x.id===targetId);
+  if(!source || !target) return;
+  if(source.teamSize>1 || target.teamSize>1){
+    toast('2er-Team ist bereits voll – erst trennen, bevor eine dritte Person dazu kommt', 'warning');
+    return;
+  }
+  const combinedName = `${target.name} + ${source.name}`;
+  if(tours.some(t=> t.id!==target.id && t.id!==source.id && t.name.toLowerCase()===combinedName.toLowerCase())){
+    toast('Diese Tour-Kombination gibt es schon', 'warning');
+    return;
+  }
+  target.name = combinedName;
+  target.teamSize = 2;
+  orders.forEach(o=>{ if(o.assignedTourId===source.id) o.assignedTourId = target.id; });
+  tours = tours.filter(x=>x.id!==source.id);
+  saveTours();
+  renderAll();
+  toast(`Tour zusammengeführt: ${combinedName}`, 'check');
 }
 
 /* =====================================================================
@@ -2235,9 +2263,10 @@ function renderTouren(){
     const over8h = totalMin > 8*60;
     const card = document.createElement('div');
     card.className='card tourcard';
+    card.dataset.tourDrop = t.id;
     card.innerHTML = `
       <div class="card-h">
-        <h2><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>
+        <h2 draggable="true" data-tour-drag="${t.id}" style="cursor:grab" title="Auf eine andere Tour ziehen, um daraus automatisch eine 2er-Tour zu machen"><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="badge ${over8h?'b-warn':'b-neutral'}">${fmtHoursShort(totalMin)}${over8h?' · über 8 Std.':''}</span>
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-map="${t.id}"><svg><use href="#i-route"/></svg>Karte anzeigen</button>` : ''}
@@ -2256,6 +2285,27 @@ function renderTouren(){
     wrap.appendChild(card);
   });
 
+  wrap.querySelectorAll('[data-tour-drag]').forEach(handle=>{
+    handle.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', handle.dataset.tourDrag);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  });
+  wrap.querySelectorAll('.tourcard').forEach(card=>{
+    card.addEventListener('dragover', e=>{
+      if(!e.dataTransfer.types.includes('text/plain')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('drop-hover');
+    });
+    card.addEventListener('dragleave', ()=> card.classList.remove('drop-hover'));
+    card.addEventListener('drop', e=>{
+      e.preventDefault();
+      card.classList.remove('drop-hover');
+      const sourceId = e.dataTransfer.getData('text/plain');
+      mergeTours(sourceId, card.dataset.tourDrop);
+    });
+  });
   wrap.querySelectorAll('[data-rm]').forEach(btn=> btn.addEventListener('click', ()=> removeTour(btn.dataset.rm)));
   wrap.querySelectorAll('[data-unassign]').forEach(btn=> btn.addEventListener('click', ()=>{
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
