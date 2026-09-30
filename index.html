@@ -174,6 +174,9 @@ td .name{font-weight:600}
 .stat-row{display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0}
 .toursec{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .tourcard{width:100%}
+.savedday-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid var(--cs-line);border-radius:10px}
+.savedday-row .tx{display:flex;flex-direction:column;gap:2px}
+.savedday-row .tx small{color:var(--cs-fg-2);font-size:12.5px}
 .stopline{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--cs-line);font-size:14px}
 .stopline:last-child{border-bottom:0}
 .stopline .swatch{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
@@ -231,10 +234,19 @@ td .name{font-weight:600}
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
           <div><div class="eyebrow">Putzfrauenservice · Dispo</div><h1 id="dashTitle">HEUTE ZU TUN</h1><p class="sub" id="dashSub">Dateien hochladen, Aufträge prüfen und den Touren zuteilen.</p></div>
-          <button class="btn btn-p" id="btnGoList" hidden><svg><use href="#i-list"/></svg>Aufträge ansehen</button>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-s" id="btnSaveDay" hidden><svg><use href="#i-upload"/></svg>Tagesdispo speichern</button>
+            <button class="btn btn-p" id="btnGoList" hidden><svg><use href="#i-list"/></svg>Aufträge ansehen</button>
+          </div>
         </div>
       </div>
       <div class="content">
+
+        <div class="card" id="savedDaysCard" style="margin-bottom:20px;padding:18px 20px" hidden>
+          <div class="card-h" style="padding:0 0 12px"><h2>Gespeicherte Tagesdispositionen</h2></div>
+          <p class="muted" style="font-size:13px;margin:-6px 0 12px">Anpassungen während des Tages werden hier laufend gesichert – jederzeit wieder aufnehmbar.</p>
+          <div id="savedDaysWrap" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
 
         <div class="card" style="margin-bottom:20px;padding:18px 20px">
           <div class="card-h" style="padding:0 0 12px"><h2>1. Dateien einlesen</h2></div>
@@ -326,7 +338,7 @@ td .name{font-weight:600}
       <div class="content">
         <h3 class="sec-t">Tour hinzufügen</h3>
         <div class="addtour card" style="padding:14px 16px">
-          <div class="field"><label for="newTourName">Name (Person oder Team)</label><input type="text" id="newTourName" placeholder="z. B. Alba oder Alba + Probe"></div>
+          <div class="field"><label for="newTourName">Name (Person oder Team)</label><input type="text" id="newTourName" placeholder="z. B. Lina oder Lina + Probedame"></div>
           <div class="field" style="min-width:auto">
             <label>Grösse</label>
             <div class="seg2">
@@ -659,6 +671,27 @@ async function parseRapportPdf(buf){
 
 function extractPlz(text){ const m = (text||'').match(/\b(\d{4})\b/); return m ? m[1] : null; }
 
+/* Kanton grob anhand der PLZ (Bereichstabelle, keine amtliche Gemeindezuordnung) -
+   dient nur der groben Sortierung/Orientierung, nicht der exakten Zuordnung. */
+const PLZ_KANTON_RANGES = [
+  [8750,8785,'GL'], [8200,8266,'SH'], [8267,8299,'TG'], [8500,8599,'TG'],
+  [6300,6349,'ZG'], [8000,8999,'ZH'],
+  [9100,9199,'AR/AI'], [9000,9699,'SG'],
+  [1200,1299,'GE'], [1600,1799,'FR'], [1000,1899,'VD'],
+  [1900,1999,'VS'], [3900,3999,'VS'],
+  [2000,2499,'NE'], [2800,2999,'JU'], [2500,2799,'BE'], [3000,3899,'BE'],
+  [4000,4099,'BS'], [4100,4499,'BL'], [4500,4799,'SO'], [4800,5999,'AG'],
+  [6000,6299,'LU'], [6350,6399,'NW/OW'], [6400,6499,'SZ'], [6500,6999,'TI'],
+  [7000,7999,'GR']
+];
+function cantonForPlz(plz){
+  if(!plz) return null;
+  const n = parseInt(plz,10);
+  if(isNaN(n)) return null;
+  for(const [lo,hi,k] of PLZ_KANTON_RANGES){ if(n>=lo && n<=hi) return k; }
+  return null;
+}
+
 function isDefaultWindow(zeit){ return zeit && zeit.von==='08:00' && zeit.bis==='17:00'; }
 
 function buildOrder({auftragNr, addressStreet, addressPlzOrt, typ, rapport, extra, targetDatum, preAssigned}){
@@ -694,6 +727,7 @@ function buildOrder({auftragNr, addressStreet, addressPlzOrt, typ, rapport, extr
     notes,
     aktiv: rapport ? rapport.aktiv : null,
     plz,
+    kanton: cantonForPlz(plz),
     introAppointment: rapport ? rapport.introAppointment : null,
     extra: !!extra,
     preAssigned: preAssigned || null,
@@ -782,6 +816,22 @@ function uid(){ return Math.random().toString(36).slice(2,9); }
    ZUSTAND
 ===================================================================== */
 const TOUR_COLORS = ["#7B2D8E","#1565C0","#2E7D32","#E67E22","#C0392B","#0E7C7B","#8E5A2D","#5B6ABF","#AD1457","#00838F"];
+/* Festes Springerteam mit festen Tourfarben (Cristian, 30.09.2026) */
+const SPRINGERTEAM = [
+  { name:'Lina', color:'#1565C0' },
+  { name:'Alba', color:'#E67E22' },
+  { name:'Cristina', color:'#2E7D32' },
+  { name:'Yulisa', color:'#C0392B' },
+  { name:'Ginett', color:'#7B2D8E' }
+];
+function fixedColorForName(name){
+  const tokens = name.toLowerCase().split(/[\s+]+/).filter(Boolean);
+  for(const tok of tokens){
+    const hit = SPRINGERTEAM.find(m=>m.name.toLowerCase()===tok);
+    if(hit) return hit.color;
+  }
+  return null;
+}
 let listFile = null;      // {name, buf}
 let rappFiles = [];       // [{name, buf}]
 let parsedListRows = [];
@@ -801,13 +851,21 @@ function saveTours(){
   try{ localStorage.setItem('cs-dispo-tours', JSON.stringify(tours)); }catch(e){}
 }
 loadTours();
+function seedDefaultToursIfEmpty(){
+  if(tours.length>0) return;
+  tours = SPRINGERTEAM.map(m=>({ id: uid(), name: m.name, teamSize: 1, color: m.color }));
+  saveTours();
+}
+seedDefaultToursIfEmpty();
 
 function addTour(name, teamSize){
   if(!name || !name.trim()) return;
-  if(tours.some(t=>t.name.toLowerCase()===name.trim().toLowerCase())){ toast('Diese Tour gibt es schon', 'warning'); return; }
+  const trimmed = name.trim();
+  if(tours.some(t=>t.name.toLowerCase()===trimmed.toLowerCase())){ toast('Diese Tour gibt es schon', 'warning'); return; }
   const usedColors = new Set(tours.map(t=>t.color));
-  let color = TOUR_COLORS.find(c=>!usedColors.has(c)) || TOUR_COLORS[tours.length % TOUR_COLORS.length];
-  tours.push({ id: uid(), name: name.trim(), teamSize: teamSize||1, color });
+  let color = fixedColorForName(trimmed);
+  if(!color) color = TOUR_COLORS.find(c=>!usedColors.has(c)) || TOUR_COLORS[tours.length % TOUR_COLORS.length];
+  tours.push({ id: uid(), name: trimmed, teamSize: teamSize||1, color });
   saveTours();
 }
 function removeTour(id){
@@ -815,6 +873,144 @@ function removeTour(id){
   tours = tours.filter(t=>t.id!==id);
   saveTours();
   renderAll();
+}
+
+/* =====================================================================
+   TAGESDISPO SPEICHERN / LADEN
+   Damit während des Tages entstandene Anpassungen (Tour geändert, Zeit
+   verschoben, Auftrag nachträglich verteilt) jederzeit wieder aufgenommen
+   werden können – auch nach dem Schliessen des Browsers.
+===================================================================== */
+const DAY_PREFIX = 'cs-dispo-day-';
+let dayDirty = false;
+let dayDirtyTimer = null;
+
+function arrayBufferToBase64(buf){
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk)); }
+  return btoa(binary);
+}
+function base64ToArrayBuffer(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++){ bytes[i] = binary.charCodeAt(i); }
+  return bytes.buffer;
+}
+function dayKey(datum){ return DAY_PREFIX + datum; }
+
+function saveDayState(silent){
+  if(!targetDatum || !listFile || orders.length===0) return false;
+  try{
+    const data = {
+      targetDatum,
+      orders,
+      absenceOrders,
+      parsedListRows,
+      listFile: { name: listFile.name, base64: arrayBufferToBase64(listFile.buf) },
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(dayKey(targetDatum), JSON.stringify(data));
+    dayDirty = false;
+    if(!silent) toast('Tagesdispo gespeichert', 'check');
+    renderSavedDays();
+    return true;
+  }catch(e){
+    console.error(e);
+    if(!silent) toast('Speichern fehlgeschlagen', 'error');
+    return false;
+  }
+}
+function scheduleDaySave(){
+  if(!targetDatum || !listFile || orders.length===0) return;
+  dayDirty = true;
+  clearTimeout(dayDirtyTimer);
+  dayDirtyTimer = setTimeout(()=> saveDayState(true), 600);
+}
+
+function listSavedDays(){
+  const days = [];
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith(DAY_PREFIX)){
+      try{ const d = JSON.parse(localStorage.getItem(k)); if(d && d.targetDatum) days.push(d); }catch(e){}
+    }
+  }
+  days.sort((a,b)=> (b.savedAt||'').localeCompare(a.savedAt||''));
+  return days;
+}
+
+function loadDayState(datum){
+  const raw = localStorage.getItem(dayKey(datum));
+  if(!raw) return;
+  try{
+    const data = JSON.parse(raw);
+    targetDatum = data.targetDatum;
+    orders = data.orders || [];
+    absenceOrders = data.absenceOrders || [];
+    parsedListRows = data.parsedListRows || [];
+    listFile = data.listFile ? { name: data.listFile.name, buf: base64ToArrayBuffer(data.listFile.base64) } : null;
+    document.getElementById('dashResults').hidden = false;
+    document.getElementById('btnGoList').hidden = false;
+    document.getElementById('btnSaveDay').hidden = false;
+    document.getElementById('dashTitle').textContent = targetDatum ? `DISPO ${targetDatum}` : 'HEUTE ZU TUN';
+    document.getElementById('dashSub').textContent = 'Aufträge prüfen und den Touren zuteilen, dann PDF erstellen.';
+    ['listDatum','tourenDatum','pdfDatum'].forEach(id=> document.getElementById(id).textContent = targetDatum || 'Dispo');
+    renderAll();
+    toast('Tagesdispo geladen – Anpassungen möglich', 'check');
+  }catch(e){ console.error(e); toast('Laden fehlgeschlagen', 'error'); }
+}
+function deleteDayState(datum){
+  localStorage.removeItem(dayKey(datum));
+  renderSavedDays();
+}
+function fmtSavedAt(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit'}) + ' ' + d.toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+function renderSavedDays(){
+  const card = document.getElementById('savedDaysCard');
+  const wrap = document.getElementById('savedDaysWrap');
+  if(!card || !wrap) return;
+  const days = listSavedDays();
+  if(days.length===0){ card.hidden = true; return; }
+  card.hidden = false;
+  wrap.innerHTML = days.map(d=>{
+    const openCount = (d.orders||[]).filter(o=>!o.assignedTourId).length;
+    const isCurrent = d.targetDatum===targetDatum;
+    return `<div class="savedday-row">
+      <div class="tx"><b>${d.targetDatum}</b><small>Gespeichert ${fmtSavedAt(d.savedAt)} · ${(d.orders||[]).length} Aufträge${openCount>0 ? ', '+openCount+' offen' : ''}</small></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s" data-load-day="${d.targetDatum}">${isCurrent?'Aktuell geladen':'Laden'}</button>
+        <button class="icon-btn" aria-label="Gespeicherte Dispo löschen" data-del-day="${d.targetDatum}"><svg><use href="#i-trash"/></svg></button>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-load-day]').forEach(btn=> btn.addEventListener('click', ()=> loadDayState(btn.dataset.loadDay)));
+  wrap.querySelectorAll('[data-del-day]').forEach(btn=> btn.addEventListener('click', ()=>{
+    if(confirm(`Gespeicherte Dispo vom ${btn.dataset.delDay} wirklich löschen?`)) deleteDayState(btn.dataset.delDay);
+  }));
+}
+
+/* =====================================================================
+   ROUTE / KARTENANSICHT
+   Baut automatisch eine Google-Maps-Route mit allen Stopps einer Tour in
+   der zugeteilten Reihenfolge – der Disponent muss nichts von Hand
+   eintragen.
+===================================================================== */
+function buildMapsRouteUrl(items){
+  const addrs = items.map(o=> encodeURIComponent(o.address)).filter(Boolean);
+  if(addrs.length===0) return null;
+  if(addrs.length===1) return `https://www.google.com/maps/dir/?api=1&destination=${addrs[0]}`;
+  const origin = addrs[0];
+  const destination = addrs[addrs.length-1];
+  const waypoints = addrs.slice(1,-1);
+  let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${origin}&destination=${destination}`;
+  if(waypoints.length) url += `&waypoints=${waypoints.join('|')}`;
+  return url;
 }
 
 /* =====================================================================
@@ -881,16 +1077,19 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     toast('Aufträge eingelesen', 'check');
     document.getElementById('dashResults').hidden = false;
     document.getElementById('btnGoList').hidden = false;
+    document.getElementById('btnSaveDay').hidden = false;
     document.getElementById('dashTitle').textContent = targetDatum ? `DISPO ${targetDatum}` : 'HEUTE ZU TUN';
     document.getElementById('dashSub').textContent = 'Aufträge prüfen und den Touren zuteilen, dann PDF erstellen.';
     ['listDatum','tourenDatum','pdfDatum'].forEach(id=> document.getElementById(id).textContent = targetDatum || 'Dispo');
     renderAll();
+    saveDayState(true);
   }catch(err){
     console.error(err);
     statusEl.textContent = 'Fehler beim Einlesen – bitte Dateien prüfen.';
     toast('Fehler beim Einlesen', 'error');
   }
 });
+document.getElementById('btnSaveDay').addEventListener('click', ()=> saveDayState(false));
 
 /* =====================================================================
    RENDERING – DASHBOARD
@@ -941,11 +1140,20 @@ document.getElementById('filterOpen').addEventListener('click', e=>{
 });
 
 function filteredOrders(){
-  return orders.filter(o=>{
+  const list = orders.filter(o=>{
     if(onlyOpen && o.assignedTourId) return false;
     if(!searchTerm) return true;
     const hay = `${o.auftragNr} ${o.address} ${o.customerName||''}`.toLowerCase();
     return hay.includes(searchTerm);
+  });
+  /* Nach Kanton gruppiert (unbekannt zuletzt), innerhalb des Kantons nach PLZ, damit
+     der Disponent auf einen Blick sieht, wo die Aufträge liegen. */
+  return list.slice().sort((a,b)=>{
+    const ka = a.kanton || 'ZZZ', kb = b.kanton || 'ZZZ';
+    if(ka!==kb) return ka.localeCompare(kb);
+    const pa = a.plz || '9999', pb = b.plz || '9999';
+    if(pa!==pb) return pa.localeCompare(pb);
+    return a.address.localeCompare(b.address);
   });
 }
 
@@ -973,7 +1181,19 @@ function renderOrdersList(){
   }
   emptyEl.hidden = true;
 
+  let lastKanton = undefined;
+  const kantonLabel = k => k ? `Kanton ${k}` : 'Kanton unbekannt';
   list.forEach(o=>{
+    if(o.kanton !== lastKanton){
+      lastKanton = o.kanton;
+      const trh = document.createElement('tr');
+      trh.innerHTML = `<td colspan="4" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
+      tbody.appendChild(trh);
+      const rowh = document.createElement('div');
+      rowh.style.cssText='background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px';
+      rowh.textContent = kantonLabel(o.kanton);
+      mlist.appendChild(rowh);
+    }
     const tr = document.createElement('tr');
     tr.setAttribute('aria-selected', o.auftragNr===selectedAuftragNr ? 'true':'false');
     tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td>${statusBadge(o)}</td>`;
@@ -1019,7 +1239,7 @@ function openOrderPanel(auftragNr){
 
   document.getElementById('panelBody').innerHTML = `
     <dl class="dl">
-      <dt>Adresse</dt><dd>${o.address}</dd>
+      <dt>Adresse</dt><dd>${o.address}${o.kanton ? ' <span class="muted">('+o.kanton+')</span>' : ''}</dd>
       <dt>Kunde</dt><dd>${o.customerName || '–'}</dd>
       <dt>Typ</dt><dd>${o.typ || '–'}</dd>
       <dt>Aufwand</dt><dd>${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</dd>
@@ -1115,6 +1335,7 @@ function renderTouren(){
         <h2><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="badge ${over8h?'b-warn':'b-neutral'}">${fmtHoursShort(totalMin)}${over8h?' · über 8 Std.':''}</span>
+          ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-route="${t.id}"><svg><use href="#i-route"/></svg>Route öffnen</button>` : ''}
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
       </div>
@@ -1133,6 +1354,14 @@ function renderTouren(){
   wrap.querySelectorAll('[data-unassign]').forEach(btn=> btn.addEventListener('click', ()=>{
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
     if(o){ o.assignedTourId=null; o.assignedTime=null; renderAll(); toast('Zuteilung entfernt','check'); }
+  }));
+  wrap.querySelectorAll('[data-route]').forEach(btn=> btn.addEventListener('click', ()=>{
+    const t = tours.find(x=>x.id===btn.dataset.route);
+    if(!t) return;
+    const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+    const url = buildMapsRouteUrl(items);
+    if(url) window.open(url, '_blank', 'noopener');
+    else toast('Keine Adressen für diese Tour', 'warning');
   }));
 }
 
@@ -1269,7 +1498,10 @@ function renderAll(){
   renderOrdersList();
   renderTouren();
   renderPdfView();
+  renderSavedDays();
+  scheduleDaySave();
 }
+renderSavedDays();
 renderAll();
 </script>
 </body>
