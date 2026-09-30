@@ -1786,7 +1786,10 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
     /* CARTO Voyager statt Standard-OSM-Kacheln: gleiche freie OpenStreetMap-Daten,
        aber aufgeräumte, helle Kartografie (dezente Flächen/Strassenfarben, ohne die
        vielen POI-Symbole des Standardstils) - optisch deutlich näher an Google Maps. */
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    /* CARTO Basemaps API-Key von Clean Service Scaramuzzo AG - entfernt das
+       "API key required"-Wasserzeichen. Key gilt nur für die Raster-Kacheln,
+       nicht committen ändern ohne Rücksprache falls er einmal rotiert wird. */
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_44f3_1_85b822bd0d388aea1e9908b8', {
       maxZoom: 20,
       subdomains: 'abcd',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende &copy; <a href="https://carto.com/attributions">CARTO</a>'
