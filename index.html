@@ -1530,6 +1530,20 @@ function jobDurationMinutes(aufwand, teamSize, isEinfuehrung){
 function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 function minToTime(m){ m=Math.round(m); const h=Math.floor(m/60); const mm=m%60; return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
 function fmtHoursShort(min){ return (min/60).toFixed(1).replace('.0','').replace('.', ',') + ' Std.'; }
+/* Zeit-/Aufwand-Beschriftung für PDF-Stopps: bei einer 2er-Tour ist die
+   Vor-Ort-Zeit halbiert (z. B. 08:00-09:00 bei 2 Std. Aufwand), das würde
+   ohne Erklärung wie ein Widerspruch aussehen. Bei tatsächlicher Halbierung
+   wird der volle Aufwand deshalb explizit als "Aufwand" ausgewiesen statt
+   nur die (kürzere) Zeitspanne stehen zu lassen. */
+function fmtStopLabel(o, teamSize, start, end, dur){
+  const nominalMin = o.aufwand!=null ? o.aufwand*60 : dur;
+  const timeRange = `${minToTime(start)} - ${minToTime(end)}`;
+  const halved = teamSize>1 && o.aufwand!=null && Math.round(nominalMin)!==Math.round(dur);
+  if(halved){
+    return `${timeRange}  |  ${fmtHoursShort(nominalMin)} Aufwand (2er-Team, je ${fmtHoursShort(dur)})`;
+  }
+  return `${timeRange}  |  ${fmtHoursShort(nominalMin)}`;
+}
 function hexToRgb01(hex){ const h = hex.replace('#',''); return { r: parseInt(h.substring(0,2),16)/255, g: parseInt(h.substring(2,4),16)/255, b: parseInt(h.substring(4,6),16)/255 }; }
 function downloadBytes(bytes, filename){
   const blob = new Blob([bytes], {type:'application/pdf'});
@@ -2388,7 +2402,7 @@ async function generateFilledPdf(){
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
     page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
-    page.drawText(`${minToTime(start)} - ${minToTime(end)}  |  ${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : fmtHoursShort(dur)}`,
+    page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
       { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
   }
 
@@ -2424,7 +2438,7 @@ async function generateFilledPdf(){
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
-    targetPage.drawText(`${minToTime(start)} - ${minToTime(end)}  |  ${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : fmtHoursShort(dur)}`,
+    targetPage.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
       { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
