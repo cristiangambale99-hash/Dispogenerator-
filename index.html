@@ -2430,7 +2430,13 @@ async function generateFilledPdf(){
     cursorY -= 26;
   }
 
-  const open = orders.filter(o=>!o.assignedTourId);
+  /* Nur Aufträge unten als "NICHT ZUGETEILT" auflisten, die auf der Original-
+     Disposition GAR KEINE Zeile haben (nur via Rapport fürs Datum erkannt).
+     Aufträge, die bereits eine Zeile auf der Seite haben, sind dort schon als
+     unzugeteilt erkennbar (leeres Mitarbeiter-Feld) - sie hier zusätzlich
+     aufzulisten hätte jeden offenen Auftrag doppelt gezeigt. */
+  const allListedNrs = new Set(parsedListRows.map(r=>r.auftragNr));
+  const open = orders.filter(o=>!o.assignedTourId && !allListedNrs.has(o.auftragNr));
   for(const o of open){
     targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
     targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
@@ -2438,6 +2444,7 @@ async function generateFilledPdf(){
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText('NICHT ZUGETEILT', { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(0.7,0.1,0.1) });
     targetPage.drawText(`${o.aufwand!=null ? o.aufwand+' Std.' : '? Std.'}`, { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(0.7,0.1,0.1) });
+    targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
   }
 
