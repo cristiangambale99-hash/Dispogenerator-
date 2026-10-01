@@ -774,6 +774,10 @@ td .name{font-weight:600}
 .icon-btn{width:40px;height:40px;border-radius:10px;border:0;background:transparent;cursor:pointer;display:grid;place-items:center;color:var(--cs-fg);flex:0 0 auto}
 .icon-btn:hover{background:var(--cs-bg-soft)}
 .icon-btn svg{width:22px;height:22px}
+.key-toggle{width:32px;height:32px;border-radius:9px;border:1.5px solid var(--cs-line,#d8dde0);background:#fff;cursor:pointer;display:inline-grid;place-items:center;color:var(--cs-fg-2);flex:0 0 auto;transition:background .15s,border-color .15s,color .15s}
+.key-toggle svg{width:17px;height:17px}
+.key-toggle:hover{border-color:var(--cs-brand)}
+.key-toggle-on{background:var(--cs-brand);border-color:var(--cs-brand);color:#fff}
 .panel-b{padding:18px 22px;overflow-y:auto;flex:1}
 .mapmodal{position:fixed;top:4vh;left:50%;width:min(920px,94vw);height:90vh;background:var(--cs-surface);border-radius:var(--cs-radius-lg);box-shadow:var(--cs-shadow);z-index:32;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;visibility:hidden;transform:translate(-50%,-8px);transition:opacity .22s ease-out,transform .22s ease-out,visibility 0s .22s}
 .mapmodal.open{opacity:1;pointer-events:auto;visibility:visible;transform:translate(-50%,0);transition-delay:0s}
@@ -883,6 +887,7 @@ td .name{font-weight:600}
     <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></g></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></g></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></g></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M19 4l2.5 2.5"/></g></symbol>
   </defs>
 </svg>
 
@@ -988,7 +993,7 @@ td .name{font-weight:600}
         <div class="card">
           <div class="tablewrap">
             <table>
-              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th>Status</th></tr></thead>
+              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th style="text-align:center">Schlüssel</th><th>Status</th></tr></thead>
               <tbody id="ordersTbody"></tbody>
             </table>
           </div>
@@ -1293,6 +1298,11 @@ async function parseRapportPdf(buf){
     const aufwandMatch = rightText.match(/Aufwand:\s*([\d.,]+)\s*Std/i);
     const aufwandGeneric = aufwandMatch ? parseFloat(aufwandMatch[1].replace(',','.')) : null;
 
+    /* Kunden-E-Mail steht im Arbeitsrapport direkt unter der Mobiltelefon-Zeile
+       im Kunde-Block - wird für die Zeitmitteilung per Mail gebraucht. */
+    const emailMatch = (rightText+'\n'+leftText).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    const customerEmail = emailMatch ? emailMatch[0] : null;
+
     const zeitMatch = rightText.match(/Ausführungszeit:\s*([\d:]+)\s*-\s*([\d:]+)\s*Uhr/);
     let zeit = zeitMatch ? {von:zeitMatch[1], bis:zeitMatch[2]} : null;
 
@@ -1355,7 +1365,7 @@ async function parseRapportPdf(buf){
       }
     }
 
-    orders.push({auftragNr, bezeichnung, street, plzOrt, customerName, aufwand, dateStdPairs, zeit, dispoDatum, aktiv, notes, introAppointment});
+    orders.push({auftragNr, bezeichnung, street, plzOrt, customerName, customerEmail, aufwand, dateStdPairs, zeit, dispoDatum, aktiv, notes, introAppointment});
   }
   return orders;
 }
@@ -1410,6 +1420,7 @@ function buildOrder({auftragNr, addressStreet, addressPlzOrt, typ, rapport, extr
     auftragNr,
     address: (street ? street+', ' : '') + plzOrt,
     customerName: (rapport ? rapport.customerName : null) || null,
+    customerEmail: (rapport ? rapport.customerEmail : null) || null,
     typ: typName,
     aufwand,
     isEinfuehrung,
@@ -1424,8 +1435,11 @@ function buildOrder({auftragNr, addressStreet, addressPlzOrt, typ, rapport, extr
     preAssigned: preAssigned || null,
     missingAufwand: aufwand==null,
     missingRapport: !rapport,
+    hasKey: false,
     assignedTourId: null,
-    assignedTime: null
+    assignedTime: null,
+    notifiedTourId: null,
+    notifiedTime: null
   };
 }
 
@@ -2170,6 +2184,23 @@ function filteredOrders(){
   });
 }
 
+/* Schlüssel-Toggle: anklickbar direkt in der Liste, ohne den Auftrag zu öffnen -
+   zeigt an, ob Loris den Kundenschlüssel bereits hat (für die Zeitmitteilung
+   per Mail: mit oder ohne Hinweis, dass der Kunde selbst vor Ort sein muss). */
+function keyToggleEl(o){
+  const btn = document.createElement('button');
+  btn.className = 'key-toggle' + (o.hasKey ? ' key-toggle-on' : '');
+  btn.setAttribute('aria-label', o.hasKey ? 'Schlüssel vorhanden – zum Entfernen klicken' : 'Schlüssel nicht vorhanden – zum Markieren klicken');
+  btn.title = o.hasKey ? 'Schlüssel vorhanden' : 'Schlüssel nicht vorhanden';
+  btn.innerHTML = '<svg><use href="#i-key"/></svg>';
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    o.hasKey = !o.hasKey;
+    renderAll();
+  });
+  return btn;
+}
+
 function statusBadge(o){
   if(o.assignedTourId){
     const t = tours.find(t=>t.id===o.assignedTourId);
@@ -2200,7 +2231,7 @@ function renderOrdersList(){
     if(o.kanton !== lastKanton){
       lastKanton = o.kanton;
       const trh = document.createElement('tr');
-      trh.innerHTML = `<td colspan="4" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
+      trh.innerHTML = `<td colspan="5" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
       tbody.appendChild(trh);
       const rowh = document.createElement('div');
       rowh.style.cssText='background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px';
@@ -2209,14 +2240,19 @@ function renderOrdersList(){
     }
     const tr = document.createElement('tr');
     tr.setAttribute('aria-selected', o.auftragNr===selectedAuftragNr ? 'true':'false');
-    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td>${statusBadge(o)}</td>`;
+    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td>${statusBadge(o)}</td>`;
     tr.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
+    tr.children[3].appendChild(keyToggleEl(o));
     tbody.appendChild(tr);
 
     const row = document.createElement('div');
     row.className='mrow';
-    row.innerHTML = `<div class="tx"><b>${o.auftragNr} · ${o.customerName || o.address.split(',')[0]}</b><small>${o.address}</small></div>${statusBadge(o)}`;
-    row.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
+    row.innerHTML = `<div class="tx"><b>${o.auftragNr} · ${o.customerName || o.address.split(',')[0]}</b><small>${o.address}</small></div>`;
+    row.appendChild(keyToggleEl(o));
+    const statusWrap = document.createElement('span');
+    statusWrap.innerHTML = statusBadge(o);
+    row.appendChild(statusWrap.firstElementChild);
+    row.addEventListener('click', (e)=>{ if(e.target.closest('.key-toggle')) return; openOrderPanel(o.auftragNr); });
     mlist.appendChild(row);
   });
 
@@ -2254,9 +2290,11 @@ function openOrderPanel(auftragNr){
     <dl class="dl">
       <dt>Adresse</dt><dd>${o.address}${o.kanton ? ' <span class="muted">('+o.kanton+')</span>' : ''}</dd>
       <dt>Kunde</dt><dd>${o.customerName || '–'}</dd>
+      <dt>E-Mail</dt><dd>${o.customerEmail || '<span class="muted">keine im Rapport gefunden</span>'}</dd>
       <dt>Typ</dt><dd>${o.typ || '–'}</dd>
       <dt>Aufwand</dt><dd>${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</dd>
       <dt>Notizen</dt><dd>${o.notes || '–'}</dd>
+      <dt>Schlüssel</dt><dd><button class="chip" id="panelKeyToggle" aria-pressed="${o.hasKey?'true':'false'}">${o.hasKey ? '✓ Vorhanden' : 'Nicht vorhanden'}</button></dd>
     </dl>
     ${fixHint}
     <h3 class="sec-t">Zuteilen</h3>
@@ -2302,6 +2340,12 @@ function openOrderPanel(auftragNr){
   } else {
     document.getElementById('goTourenBtn').addEventListener('click', ()=>{ closePanel(); goView('touren'); });
   }
+
+  document.getElementById('panelKeyToggle').addEventListener('click', ()=>{
+    o.hasKey = !o.hasKey;
+    openOrderPanel(auftragNr);
+    renderOrdersList();
+  });
 
   panel.classList.add('open'); panel.setAttribute('aria-hidden','false');
   scrim.classList.add('open');
