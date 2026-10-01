@@ -1540,7 +1540,7 @@ function fmtStopLabel(o, teamSize, start, end, dur){
   const timeRange = `${minToTime(start)} - ${minToTime(end)}`;
   const halved = teamSize>1 && o.aufwand!=null && Math.round(nominalMin)!==Math.round(dur);
   if(halved){
-    return `${timeRange}  |  ${fmtHoursShort(nominalMin)} Aufwand (2er-Team, je ${fmtHoursShort(dur)})`;
+    return `${timeRange}  |  ${fmtHoursShort(nominalMin)} (2er-Team je ${fmtHoursShort(dur)})`;
   }
   return `${timeRange}  |  ${fmtHoursShort(nominalMin)}`;
 }
@@ -2460,9 +2460,17 @@ async function generateFilledPdf(){
   Object.values(byTour).forEach(list=> list.forEach((o,idx)=> stopNumber[o.auftragNr]=idx+1));
   const assignedByNr = {}; assigned.forEach(o=> assignedByNr[o.auftragNr]=o);
 
-  const X_LEFT = 414.5, X_RIGHT = 542.6, X_SWATCH = 400, X_AUFTRAG = 42.5, X_ADDRESS = 96.5, X_TYP = 300.5;
+  const X_LEFT = 414.5, X_RIGHT = 562, X_SWATCH = 400, X_AUFTRAG = 42.5, X_ADDRESS = 96.5, X_TYP = 300.5;
   const usedRowKeys = new Set();
 
+  /* Zweipass-Zeichnung: zuerst ALLE Weiss-/Farb-Rechtecke für JEDE Zeile,
+     erst danach ALLE Texte. Benachbarte Zeilen liegen nur 20pt auseinander,
+     das Weiss-Rechteck zum Überdecken der Originalzeile ist aber 22pt hoch -
+     würde man Rechteck+Text Zeile für Zeile nacheinander zeichnen, löscht das
+     Rechteck der NÄCHSTEN Zeile die Unterlängen (z. B. bei "j", "g", "y") der
+     VORHERIGEN Zeile wieder weg (sichtbar z. B. als "je" -> "ie"). Mit allen
+     Rechtecken zuerst und den Texten erst danach kann das nicht mehr passieren. */
+  const pendingTexts = [];
   for(const row of parsedListRows){
     const o = assignedByNr[row.auftragNr];
     if(!o) continue;
@@ -2477,9 +2485,11 @@ async function generateFilledPdf(){
 
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
-    page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
-    page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
-      { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
+    pendingTexts.push(()=>{
+      page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+      page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
+        { x:X_LEFT, y:row.y-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
+    });
   }
 
   /* Ferienabwesenheiten auf der jeweiligen Zeile deutlich markieren, damit sie
@@ -2491,9 +2501,12 @@ async function generateFilledPdf(){
     const page = pages[row.page] || pages[0];
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(0.55,0.55,0.55) });
-    page.drawText('FERIEN', { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(0.42,0.42,0.42) });
-    if(o.preAssigned) page.drawText(o.preAssigned, { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(0.42,0.42,0.42) });
+    pendingTexts.push(()=>{
+      page.drawText('FERIEN', { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(0.42,0.42,0.42) });
+      if(o.preAssigned) page.drawText(o.preAssigned, { x:X_LEFT, y:row.y-9, size:6.5, font:fontReg, color:rgb(0.42,0.42,0.42) });
+    });
   }
+  pendingTexts.forEach(fn=> fn());
 
   const lastPageIdx = parsedListRows.length ? Math.max(...parsedListRows.map(r=>r.page)) : 0;
   const rowsOnLastPage = parsedListRows.filter(r=>r.page===lastPageIdx);
@@ -2515,7 +2528,7 @@ async function generateFilledPdf(){
     targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
-      { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
+      { x:X_LEFT, y:cursorY-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
   }
