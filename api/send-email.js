@@ -41,18 +41,22 @@ module.exports = async (req, res) => {
       continue;
     }
     try {
+      const payload = {
+        from: FROM,
+        to: [e.to],
+        subject: e.subject,
+        html: e.html
+      };
+      if (Array.isArray(e.cc) && e.cc.length) {
+        payload.cc = e.cc;
+      }
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          from: FROM,
-          to: [e.to],
-          subject: e.subject,
-          html: e.html
-        })
+        body: JSON.stringify(payload)
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {

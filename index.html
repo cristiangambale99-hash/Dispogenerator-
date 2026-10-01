@@ -778,6 +778,14 @@ td .name{font-weight:600}
 .key-toggle svg{width:17px;height:17px}
 .key-toggle:hover{border-color:var(--cs-brand)}
 .key-toggle-on{background:var(--cs-brand);border-color:var(--cs-brand);color:#fff}
+.cs-switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0}
+.cs-switch{position:relative;display:inline-block;width:40px;height:23px;flex:0 0 auto}
+.cs-switch input{opacity:0;width:0;height:0}
+.cs-switch .trk{position:absolute;inset:0;background:var(--cs-line-strong,#c7cfd2);border-radius:999px;cursor:pointer;transition:background .15s}
+.cs-switch .trk::before{content:'';position:absolute;width:17px;height:17px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.cs-switch input:checked + .trk{background:var(--cs-brand)}
+.cs-switch input:checked + .trk::before{transform:translateX(17px)}
+.cs-switch input:focus-visible + .trk{outline:2px solid var(--cs-brand-text,#1B8384);outline-offset:2px}
 .panel-b{padding:18px 22px;overflow-y:auto;flex:1}
 .mapmodal{position:fixed;top:4vh;left:50%;width:min(920px,94vw);height:90vh;background:var(--cs-surface);border-radius:var(--cs-radius-lg);box-shadow:var(--cs-shadow);z-index:32;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;visibility:hidden;transform:translate(-50%,-8px);transition:opacity .22s ease-out,transform .22s ease-out,visibility 0s .22s}
 .mapmodal.open{opacity:1;pointer-events:auto;visibility:visible;transform:translate(-50%,0);transition-delay:0s}
@@ -993,7 +1001,7 @@ td .name{font-weight:600}
         <div class="card">
           <div class="tablewrap">
             <table>
-              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th style="text-align:center">Schlüssel</th><th>Status</th></tr></thead>
+              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th style="text-align:center">Schlüssel</th><th>Status</th><th></th></tr></thead>
               <tbody id="ordersTbody"></tbody>
             </table>
           </div>
@@ -1056,6 +1064,15 @@ td .name{font-weight:600}
           <div class="card-h" style="padding:0 0 10px"><h2>Kunden-Zeitmitteilung</h2></div>
           <p class="muted" id="notifyStatus" style="font-size:13.5px;margin:0 0 14px">Noch keine Aufträge zugeteilt.</p>
           <button class="btn btn-p" id="btnReviewNotify"><svg><use href="#i-pdf"/></svg>Dispo bestätigen &amp; Zeitmitteilung prüfen</button>
+          <div style="border-top:1px solid var(--cs-line);margin-top:16px">
+            <div class="cs-switch-row">
+              <div>
+                <div style="font-size:13.5px;font-weight:600">Kopie an putzfrauenservice@clean-service.ch</div>
+                <div class="muted" style="font-size:12px;margin-top:2px">Jede Zeitmitteilung zusätzlich intern als Kopie mitsenden</div>
+              </div>
+              <label class="cs-switch"><input type="checkbox" id="ccPfsToggle"><span class="trk"></span></label>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -2222,6 +2239,31 @@ function keyToggleEl(o){
   return btn;
 }
 
+/* Löschen: Loris soll fälschlich eingelesene oder nicht mehr benötigte
+   Aufträge direkt aus der Liste entfernen können - mit Sicherheitsabfrage,
+   damit nichts aus Versehen verschwindet. */
+function deleteOrder(auftragNr){
+  const o = orders.find(x=>x.auftragNr===auftragNr);
+  if(!o) return;
+  if(!confirm(`Auftrag ${auftragNr}${o.customerName? ' ('+o.customerName+')' : ''} wirklich aus der Dispo löschen?`)) return;
+  orders = orders.filter(x=>x.auftragNr!==auftragNr);
+  if(selectedAuftragNr===auftragNr){ closePanel(); }
+  toast('Auftrag gelöscht', 'check');
+  renderAll();
+}
+function deleteOrderBtnEl(o){
+  const btn = document.createElement('button');
+  btn.className = 'icon-btn';
+  btn.setAttribute('aria-label', `Auftrag ${o.auftragNr} löschen`);
+  btn.title = 'Auftrag löschen';
+  btn.innerHTML = '<svg><use href="#i-trash"/></svg>';
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    deleteOrder(o.auftragNr);
+  });
+  return btn;
+}
+
 function statusBadge(o){
   if(o.assignedTourId){
     const t = tours.find(t=>t.id===o.assignedTourId);
@@ -2252,7 +2294,7 @@ function renderOrdersList(){
     if(o.kanton !== lastKanton){
       lastKanton = o.kanton;
       const trh = document.createElement('tr');
-      trh.innerHTML = `<td colspan="5" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
+      trh.innerHTML = `<td colspan="6" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
       tbody.appendChild(trh);
       const rowh = document.createElement('div');
       rowh.style.cssText='background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px';
@@ -2261,9 +2303,10 @@ function renderOrdersList(){
     }
     const tr = document.createElement('tr');
     tr.setAttribute('aria-selected', o.auftragNr===selectedAuftragNr ? 'true':'false');
-    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td>${statusBadge(o)}</td>`;
+    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td>${statusBadge(o)}</td><td style="text-align:center"></td>`;
     tr.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
     tr.children[3].appendChild(keyToggleEl(o));
+    tr.children[5].appendChild(deleteOrderBtnEl(o));
     tbody.appendChild(tr);
 
     const row = document.createElement('div');
@@ -2273,7 +2316,8 @@ function renderOrdersList(){
     const statusWrap = document.createElement('span');
     statusWrap.innerHTML = statusBadge(o);
     row.appendChild(statusWrap.firstElementChild);
-    row.addEventListener('click', (e)=>{ if(e.target.closest('.key-toggle')) return; openOrderPanel(o.auftragNr); });
+    row.appendChild(deleteOrderBtnEl(o));
+    row.addEventListener('click', (e)=>{ if(e.target.closest('.key-toggle') || e.target.closest('.icon-btn')) return; openOrderPanel(o.auftragNr); });
     mlist.appendChild(row);
   });
 
@@ -2332,10 +2376,11 @@ function openOrderPanel(auftragNr){
   if(footer) footer.remove();
   const f = document.createElement('div');
   f.className='panel-f';
-  f.innerHTML = tours.length ? `
+  f.innerHTML = (tours.length ? `
     <button class="btn btn-p" id="assignBtn">${o.assignedTourId?'Aktualisieren':'Zuteilen'}</button>
     ${o.assignedTourId ? '<button class="btn btn-s" id="unassignBtn">Zuteilung entfernen</button>' : ''}
-  ` : `<button class="btn btn-s" id="goTourenBtn">Zur Touren-Verwaltung</button>`;
+  ` : `<button class="btn btn-s" id="goTourenBtn">Zur Touren-Verwaltung</button>`)
+  + `<button class="btn btn-s" id="deleteOrderBtn" style="color:var(--cs-err);margin-left:auto"><svg><use href="#i-trash"/></svg>Auftrag löschen</button>`;
   panel.appendChild(f);
 
   if(tours.length){
@@ -2366,6 +2411,10 @@ function openOrderPanel(auftragNr){
     o.hasKey = !o.hasKey;
     openOrderPanel(auftragNr);
     renderOrdersList();
+  });
+
+  document.getElementById('deleteOrderBtn').addEventListener('click', ()=>{
+    deleteOrder(auftragNr);
   });
 
   panel.classList.add('open'); panel.setAttribute('aria-hidden','false');
@@ -2534,29 +2583,55 @@ function salutationFor(o){
   if(isFrau || isHerr) return `Guten Tag ${isFrau?'Frau':'Herr'} ${last}`;
   return `Guten Tag ${name}`;
 }
+/* Logo wird direkt von der offiziellen Website eingebunden (Original-Datei,
+   nicht nachgebaut) - so bleibt die Mail markenkonform ohne ein eigenes
+   Logo-Asset pflegen zu müssen. */
+const CS_LOGO_URL = 'https://clean-service.ch/wp-content/uploads/logo-clean-service-nav.svg';
+
 /* Zwei Varianten je nachdem ob wir den Kundenschlüssel bereits haben - mit
    Schlüssel braucht es keinen Hinweis, dass der Kunde selbst vor Ort sein muss. */
 function buildTimeNotificationEmail(o){
   const datumLong = formatDatumLong(targetDatum);
-  const internerHinweis = o.hasKey ? '' : `
-      <p style="margin:0 0 16px">
-        <b>Interne Notiz:</b><br>
-        Sie werden vor Ort sein, um uns den Zutritt gewährleisten zu können.
-      </p>`;
+  const zutrittsHinweis = o.hasKey ? '' : `
+        <p style="margin:0 0 16px">
+          Da uns für diese Reinigung noch kein Schlüssel vorliegt, bitten wir Sie, zum genannten Zeitpunkt selbst vor Ort zu sein bzw. uns den Zutritt zu ermöglichen.
+        </p>`;
   const html = `
-    <div style="font-family:Verdana,Geneva,sans-serif;font-size:13px;line-height:1.6;color:#3C3C3B;max-width:560px">
-      <p style="margin:0 0 16px">${salutationFor(o)}</p>
-      <p style="margin:0 0 16px">
-        Die Ersatzreinigung durch unser Springer-Team wird morgen, <b>${datumLong}, um ca. ${o.assignedTime} Uhr</b> erfolgen.
-      </p>
-      <p style="margin:0 0 16px">
-        <b>Bitte beachten Sie, dass es zu Abweichungen bei den Uhrzeiten kommen kann. Wir können nicht garantieren, dass die festgelegte Uhrzeit bestehen bleibt.</b>
-      </p>${internerHinweis}
-      <p style="margin:0 0 4px">Vielen Dank und Freundliche Grüsse</p>
-      <p style="margin:0 0 20px;color:#60BEB3;font-weight:bold">Administration Putzfrauenservice</p>
-      <div style="border-top:1px solid #d8dde0;padding-top:12px;margin-bottom:16px">
-        <p style="margin:0;color:#60BEB3;font-weight:bold">Clean Service Scaramuzzo AG</p>
-        <p style="margin:0;color:#767676">Industriestrasse 5<br>8307 Effretikon<br>0844 355 355</p>
+    <div style="font-family:Verdana,Geneva,sans-serif;background:#eef1f2;padding:24px 12px">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e1e6e8;border-radius:8px;padding:28px 32px;font-size:13px;line-height:1.6;color:#3C3C3B">
+        <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:22px">
+          <tr>
+            <td style="vertical-align:middle"><img src="${CS_LOGO_URL}" alt="Clean Service by Scaramuzzo" height="34" style="display:block;height:34px;width:auto"></td>
+            <td style="vertical-align:middle;text-align:right;color:#767676;font-size:11.5px;line-height:1.5">Putzfrauenservice<br>seit 1984</td>
+          </tr>
+        </table>
+        <h1 style="margin:0 0 16px;font-size:18px;font-weight:bold;color:#3C3C3B">Zeitmitteilung für morgen</h1>
+        <p style="margin:0 0 16px">${salutationFor(o)}</p>
+        <p style="margin:0 0 16px">
+          Die Ersatzreinigung durch unser Springer-Team findet wie folgt statt:
+        </p>
+        <table role="presentation" width="100%" style="border-collapse:collapse;background:#f4f6f7;border-left:3px solid #2BB6B7;border-radius:4px;margin:0 0 18px">
+          <tr>
+            <td style="padding:16px 18px">
+              <table role="presentation" width="100%" style="border-collapse:collapse;font-size:13px">
+                <tr><td style="color:#767676;padding:2px 0;width:90px">Datum</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">${datumLong}</td></tr>
+                <tr><td style="color:#767676;padding:2px 0">Uhrzeit</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">ca. ${o.assignedTime} Uhr</td></tr>
+                <tr><td style="color:#767676;padding:2px 0;vertical-align:top">Adresse</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">${o.address || '–'}</td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 16px">
+          Bitte beachten Sie, dass es zu Abweichungen bei den Uhrzeiten kommen kann. Wir können nicht garantieren, dass die festgelegte Uhrzeit bestehen bleibt.
+        </p>${zutrittsHinweis}
+        <p style="margin:0 0 4px">Vielen Dank und freundliche Grüsse</p>
+        <p style="margin:0 0 20px;color:#60BEB3;font-weight:bold">Administration Putzfrauenservice</p>
+        <div style="border-top:1px solid #d8dde0;padding-top:14px">
+          <p style="margin:0;color:#60BEB3;font-weight:bold">Clean Service Scaramuzzo AG</p>
+          <p style="margin:0 0 10px;color:#767676">Industriestrasse 5<br>8307 Effretikon<br>T 0844 355 355</p>
+          <p style="margin:0;color:#9AD3D3;font-weight:bold;font-size:11.5px;letter-spacing:.03em">DIE NEUE WELT VON CLEAN SERVICE.</p>
+          <p style="margin:2px 0 0"><a href="https://clean-service.ch" style="color:#1B8384;text-decoration:none;font-size:11.5px">clean-service.ch</a></p>
+        </div>
       </div>
     </div>`;
   const subject = `Ihre Reinigung morgen, ${datumLong} – ca. ${o.assignedTime} Uhr`;
@@ -2565,6 +2640,21 @@ function buildTimeNotificationEmail(o){
 
 /* Aufträge, die zugeteilt+mit E-Mail sind UND seit der letzten Benachrichtigung
    eine andere Tour/Uhrzeit bekommen haben (oder noch nie benachrichtigt wurden). */
+/* Admin-Einstellung: Kopie jeder Zeitmitteilung intern an putzfrauenservice@
+   clean-service.ch mitsenden - persistiert lokal, Standard an. */
+const CC_PFS_KEY = 'cs-dispo-cc-pfs';
+const CC_PFS_ADDRESS = 'putzfrauenservice@clean-service.ch';
+function ccPfsEnabled(){
+  try{ const v = localStorage.getItem(CC_PFS_KEY); return v===null ? true : v==='1'; }catch(e){ return true; }
+}
+(function initCcToggle(){
+  const el = document.getElementById('ccPfsToggle');
+  el.checked = ccPfsEnabled();
+  el.addEventListener('change', ()=>{
+    try{ localStorage.setItem(CC_PFS_KEY, el.checked ? '1' : '0'); }catch(e){}
+  });
+})();
+
 function pendingNotifications(){
   return orders.filter(o=>
     o.assignedTourId && o.assignedTime && o.customerEmail &&
@@ -2619,9 +2709,10 @@ document.getElementById('notifySendBtn').addEventListener('click', async ()=>{
   btn.disabled = true;
   btn.textContent = 'Wird gesendet …';
   try{
+    const ccPfs = ccPfsEnabled();
     const emails = pending.map(o=>{
       const { subject, html } = buildTimeNotificationEmail(o);
-      return { to: o.customerEmail, subject, html, auftragNr: o.auftragNr };
+      return { to: o.customerEmail, subject, html, auftragNr: o.auftragNr, cc: ccPfs ? [CC_PFS_ADDRESS] : undefined };
     });
     const res = await fetch('/api/send-email', {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ emails })
