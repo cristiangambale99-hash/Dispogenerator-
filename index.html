@@ -1072,6 +1072,13 @@ td .name{font-weight:600}
               </div>
               <label class="cs-switch"><input type="checkbox" id="ccPfsToggle"><span class="trk"></span></label>
             </div>
+            <div class="cs-switch-row" style="border-top:1px solid var(--cs-line)">
+              <div>
+                <div style="font-size:13.5px;font-weight:600">Schlüssellieferung & Einführung PFS ausschliessen</div>
+                <div class="muted" style="font-size:12px;margin-top:2px">Diese Auftragsarten erhalten keine Zeitmitteilung</div>
+              </div>
+              <label class="cs-switch"><input type="checkbox" id="excludeTypesToggle"><span class="trk"></span></label>
+            </div>
           </div>
         </div>
       </div>
@@ -1374,7 +1381,11 @@ async function parseRapportPdf(buf){
           if(/^\d{4}\s+\S/.test(l)) break;
           if(/^(Telefon|Mobiltelefon|Mobile)/i.test(l)) break;
           if(/@/.test(l)) break;
-          if(/\d+\s*$/.test(l)) break;
+          /* Jede Zeile mit einer Ziffer ist eine Strassenzeile (auch bei
+             Hausnummern mit Buchstaben-Suffix wie "2A", "15b") und gehört
+             nicht mehr zum Namen - sonst landet z.B. "Lägernweg 2A" im Namen
+             und am Ende in der Anrede ("Frau 2A" statt "Frau Palmisano"). */
+          if(/\d/.test(l)) break;
           nameLines.push(l);
         }
         customerName = nameLines.join(' ').replace(/\s+/g,' ').trim() || null;
@@ -2547,16 +2558,19 @@ function renderPdfView(){
   }
 
   const statusEl = document.getElementById('notifyStatus');
+  const changedAssigned = assigned.filter(o=> o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime);
+  const excludedByType = excludeTypesEnabled() ? changedAssigned.filter(o=> isNotifyExcludedType(o)) : [];
   const pending = pendingNotifications();
-  const noEmail = assigned.filter(o=> !o.customerEmail && (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime));
+  const noEmail = changedAssigned.filter(o=> !o.customerEmail && !isNotifyExcludedType(o));
   if(assigned.length===0){
     statusEl.textContent = 'Noch keine Aufträge zugeteilt.';
-  } else if(pending.length===0 && noEmail.length===0){
+  } else if(pending.length===0 && noEmail.length===0 && excludedByType.length===0){
     statusEl.textContent = 'Alle Kunden mit E-Mail wurden bereits über ihren aktuellen Termin informiert.';
   } else {
     const parts = [];
     if(pending.length>0) parts.push(`${pending.length} Zeitmitteilung${pending.length>1?'en':''} bereit zum Versand`);
     if(noEmail.length>0) parts.push(`${noEmail.length} ohne hinterlegte E-Mail (im Rapport keine gefunden)`);
+    if(excludedByType.length>0) parts.push(`${excludedByType.length} ohne Zeitmitteilung (Schlüssellieferung/Einführung)`);
     statusEl.textContent = parts.join(' · ') + '.';
   }
 }
@@ -2589,14 +2603,24 @@ function salutationFor(o){
    können, egal ob sie externe Fremd-Domains blockieren. */
 const CS_LOGO_URL = 'https://dispo-generator-css.vercel.app/assets/email/logo-clean-service.png';
 
-/* Zwei Varianten je nachdem ob wir den Kundenschlüssel bereits haben - mit
-   Schlüssel braucht es keinen Hinweis, dass der Kunde selbst vor Ort sein muss. */
+/* Layout angelehnt an die bestehende Angebots-Mail (Kopf mit Logo + "seit 1984",
+   Eyebrow-Label über einer Box mit je Feld Label-oben/Wert-fett-darunter statt
+   Zweispalter) - Zutritts-Hinweis nur ohne Schlüssel. Ist der Kunde schon einmal
+   informiert worden (o.notifiedTourId gesetzt) und bekommt jetzt eine geänderte
+   Zuteilung, wird das als "aktualisierte" Zeitmitteilung mit eigener Kennzeichnung
+   verschickt statt der Erstmitteilung. */
 function buildTimeNotificationEmail(o){
   const datumLong = formatDatumLong(targetDatum);
+  const isUpdate = !!o.notifiedTourId;
   const zutrittsHinweis = o.hasKey ? '' : `
         <p style="margin:0 0 16px">
           Da uns für diese Reinigung noch kein Schlüssel vorliegt, bitten wir Sie, zum genannten Zeitpunkt selbst vor Ort zu sein bzw. uns den Zutritt zu ermöglichen.
         </p>`;
+  const eyebrow = isUpdate ? 'Aktualisierte Zeitmitteilung' : 'Zeitmitteilung';
+  const heading = isUpdate ? 'Ihr Reinigungstermin wurde angepasst' : 'Zeitmitteilung für morgen';
+  const intro = isUpdate
+    ? 'Wir müssen Ihnen eine kurze Anpassung zu der bereits angekündigten Reinigung mitteilen. Der aktuelle Stand:'
+    : 'Die Ersatzreinigung durch unser Springer-Team findet wie folgt statt:';
   const html = `
     <div style="font-family:Verdana,Geneva,sans-serif;background:#eef1f2;padding:24px 12px">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e1e6e8;border-radius:8px;padding:28px 32px;font-size:13px;line-height:1.6;color:#3C3C3B">
@@ -2606,19 +2630,17 @@ function buildTimeNotificationEmail(o){
             <td style="vertical-align:middle;text-align:right;color:#767676;font-size:11.5px;line-height:1.5">Putzfrauenservice<br>seit 1984</td>
           </tr>
         </table>
-        <h1 style="margin:0 0 16px;font-size:18px;font-weight:bold;color:#3C3C3B">Zeitmitteilung für morgen</h1>
+        <p style="margin:0 0 6px;color:#1B8384;font-weight:bold;font-size:11px;letter-spacing:.06em;text-transform:uppercase">${eyebrow}</p>
+        <h1 style="margin:0 0 16px;font-size:18px;font-weight:bold;color:#3C3C3B">${heading}</h1>
         <p style="margin:0 0 16px">${salutationFor(o)}</p>
-        <p style="margin:0 0 16px">
-          Die Ersatzreinigung durch unser Springer-Team findet wie folgt statt:
-        </p>
+        <p style="margin:0 0 16px">${intro}</p>
         <table role="presentation" width="100%" style="border-collapse:collapse;background:#f4f6f7;border-left:3px solid #2BB6B7;border-radius:4px;margin:0 0 18px">
           <tr>
-            <td style="padding:16px 18px">
-              <table role="presentation" width="100%" style="border-collapse:collapse;font-size:13px">
-                <tr><td style="color:#767676;padding:2px 0;width:90px">Datum</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">${datumLong}</td></tr>
-                <tr><td style="color:#767676;padding:2px 0">Uhrzeit</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">ca. ${o.assignedTime} Uhr</td></tr>
-                <tr><td style="color:#767676;padding:2px 0;vertical-align:top">Adresse</td><td style="font-weight:bold;color:#3C3C3B;padding:2px 0">${o.address || '–'}</td></tr>
-              </table>
+            <td style="padding:18px 20px">
+              <p style="margin:0 0 14px;color:#767676;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase">Ihre Reinigung</p>
+              <p style="margin:0 0 12px"><span style="display:block;color:#767676;font-size:11.5px">Datum</span><span style="display:block;color:#3C3C3B;font-weight:bold">${datumLong}</span></p>
+              <p style="margin:0 0 12px"><span style="display:block;color:#767676;font-size:11.5px">Uhrzeit</span><span style="display:block;color:#3C3C3B;font-weight:bold">ca. ${o.assignedTime} Uhr</span></p>
+              <p style="margin:0"><span style="display:block;color:#767676;font-size:11.5px">Adresse</span><span style="display:block;color:#3C3C3B;font-weight:bold">${o.address || '–'}</span></p>
             </td>
           </tr>
         </table>
@@ -2635,7 +2657,7 @@ function buildTimeNotificationEmail(o){
         </div>
       </div>
     </div>`;
-  const subject = `Ihre Reinigung morgen, ${datumLong} – ca. ${o.assignedTime} Uhr`;
+  const subject = (isUpdate ? 'Aktualisierung: ' : '') + `Ihre Reinigung morgen, ${datumLong} – ca. ${o.assignedTime} Uhr`;
   return { subject, html };
 }
 
@@ -2656,10 +2678,31 @@ function ccPfsEnabled(){
   });
 })();
 
+/* Admin-Einstellung: Schlüssellieferungen und Einführungen PFS bekommen keine
+   Zeitmitteilung (es gibt dabei keinen eigentlichen Reinigungstermin beim
+   Kunden mitzuteilen) - lässt sich im Adminbereich ein-/ausschalten, Standard an. */
+const EXCLUDE_TYPES_KEY = 'cs-dispo-exclude-types';
+function excludeTypesEnabled(){
+  try{ const v = localStorage.getItem(EXCLUDE_TYPES_KEY); return v===null ? true : v==='1'; }catch(e){ return true; }
+}
+function isNotifyExcludedType(o){
+  return /schlüssellieferung|einführung/i.test(o.typ || '');
+}
+(function initExcludeTypesToggle(){
+  const el = document.getElementById('excludeTypesToggle');
+  if(!el) return;
+  el.checked = excludeTypesEnabled();
+  el.addEventListener('change', ()=>{
+    try{ localStorage.setItem(EXCLUDE_TYPES_KEY, el.checked ? '1' : '0'); }catch(e){}
+    renderPdfView();
+  });
+})();
+
 function pendingNotifications(){
   return orders.filter(o=>
     o.assignedTourId && o.assignedTime && o.customerEmail &&
-    (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime)
+    (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime) &&
+    !(excludeTypesEnabled() && isNotifyExcludedType(o))
   );
 }
 
