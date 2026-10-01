@@ -1861,7 +1861,7 @@ function mapPopupHtml(o){
       ${tours.length===0 ? '<p class="muted" style="font-size:11.5px;margin:0">Keine Touren angelegt.</p>' : `
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
         <select class="map-pop-tour" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)"><option value="">– Tour wählen –</option>${tourOptions}</select>
-        <input type="time" class="map-pop-time" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
+        <input type="text" inputmode="numeric" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" maxlength="5" placeholder="HH:MM" class="time-ch map-pop-time" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-p map-pop-assign" style="padding:6px 10px;font-size:12.5px;flex:1">${o.assignedTourId?'Aktualisieren':'Zuteilen'}</button>
@@ -2263,7 +2263,7 @@ function openOrderPanel(auftragNr){
     <div class="pnl-assign">
       ${tours.length===0 ? '<p class="muted" style="font-size:13.5px">Noch keine Touren angelegt – zuerst unter «Touren» eine Tour hinzufügen.</p>' : `
       <div class="field"><label for="assignTour">Tour</label><select id="assignTour"><option value="">– Tour wählen –</option>${tourOptions}</select></div>
-      <div class="field"><label for="assignTime">Uhrzeit (Beginn)</label><input type="time" id="assignTime" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}"></div>
+      <div class="field"><label for="assignTime">Uhrzeit (Beginn)</label><input type="text" inputmode="numeric" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" maxlength="5" placeholder="HH:MM" class="time-ch" id="assignTime" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}"></div>
       `}
     </div>
   `;
@@ -2311,6 +2311,16 @@ function closePanel(){ panel.classList.remove('open'); panel.setAttribute('aria-
 document.getElementById('panelClose').addEventListener('click', closePanel);
 scrim.addEventListener('click', closePanel);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closePanel(); closeDrawer(); closeTourMap(); } });
+
+/* Uhrzeit-Eingaben immer im Schweizer 24h-Format (HH:MM) - ein natives
+   <input type="time"> zeigt je nach Browser-/Systemsprache mitunter AM/PM an,
+   unabhängig vom lang-Attribut der Seite. Darum ein einfaches Text-Feld mit
+   automatischer HH:MM-Formatierung statt des nativen Zeit-Pickers. */
+document.addEventListener('input', e=>{
+  if(!(e.target instanceof HTMLInputElement) || !e.target.classList.contains('time-ch')) return;
+  let digits = e.target.value.replace(/[^\d]/g,'').slice(0,4);
+  e.target.value = digits.length>2 ? digits.slice(0,2)+':'+digits.slice(2) : digits;
+});
 
 /* =====================================================================
    TOUREN-ANSICHT
