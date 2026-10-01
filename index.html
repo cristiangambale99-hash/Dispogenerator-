@@ -1052,6 +1052,11 @@ td .name{font-weight:600}
           <div class="stat-row"><span class="muted">Noch offen</span><b id="sumOpen">0</b></div>
           <div class="stat-row"><span class="muted">Touren</span><b id="sumTours">0</b></div>
         </div>
+        <div class="card" style="padding:16px 18px;margin-top:16px">
+          <div class="card-h" style="padding:0 0 10px"><h2>Kunden-Zeitmitteilung</h2></div>
+          <p class="muted" id="notifyStatus" style="font-size:13.5px;margin:0 0 14px">Noch keine Aufträge zugeteilt.</p>
+          <button class="btn btn-p" id="btnReviewNotify"><svg><use href="#i-pdf"/></svg>Dispo bestätigen &amp; Zeitmitteilung prüfen</button>
+        </div>
       </div>
     </section>
   </div>
@@ -1074,6 +1079,22 @@ td .name{font-weight:600}
   </div>
   <div id="tourMapEl"></div>
   <div id="mapModalStatus" class="muted" style="font-size:12.5px"></div>
+</div>
+
+<div class="scrim" id="notifyScrim"></div>
+<div class="mapmodal" id="notifyModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="notifyModalTitle" style="height:auto;max-height:90vh">
+  <div class="mapmodal-h">
+    <div><div class="eyebrow">Zeitmitteilung per Mail</div><h2 id="notifyModalTitle">Vorschau</h2></div>
+    <button class="icon-btn" id="notifyModalClose" aria-label="Schliessen"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div style="padding:18px 20px;overflow-y:auto;flex:1 1 auto">
+    <p class="muted" id="notifyModalIntro" style="font-size:13.5px;margin:0 0 14px"></p>
+    <div id="notifyList"></div>
+  </div>
+  <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
+    <button class="btn btn-p" id="notifySendBtn">Jetzt senden</button>
+    <button class="btn btn-s" id="notifyCancelBtn">Abbrechen</button>
+  </div>
 </div>
 
 <div class="scrim" id="dscrim"></div>
@@ -2475,7 +2496,156 @@ function renderPdfView(){
   } else {
     warnEl.innerHTML = '';
   }
+
+  const statusEl = document.getElementById('notifyStatus');
+  const pending = pendingNotifications();
+  const noEmail = assigned.filter(o=> !o.customerEmail && (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime));
+  if(assigned.length===0){
+    statusEl.textContent = 'Noch keine Aufträge zugeteilt.';
+  } else if(pending.length===0 && noEmail.length===0){
+    statusEl.textContent = 'Alle Kunden mit E-Mail wurden bereits über ihren aktuellen Termin informiert.';
+  } else {
+    const parts = [];
+    if(pending.length>0) parts.push(`${pending.length} Zeitmitteilung${pending.length>1?'en':''} bereit zum Versand`);
+    if(noEmail.length>0) parts.push(`${noEmail.length} ohne hinterlegte E-Mail (im Rapport keine gefunden)`);
+    statusEl.textContent = parts.join(' · ') + '.';
+  }
 }
+
+/* =====================================================================
+   KUNDEN-ZEITMITTEILUNG PER MAIL (RESEND)
+===================================================================== */
+const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function formatDatumLong(d){
+  if(!d) return '';
+  const m = d.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if(!m) return d;
+  return `${parseInt(m[1],10)}. ${MONTHS_DE[parseInt(m[2],10)-1]} ${m[3]}`;
+}
+/* Nachname für die Anrede: beim üblichen "Herr/Frau Vorname Nachname" das letzte
+   Wort nehmen; ohne erkennbaren Namen bleibt die Anrede allgemein. */
+function salutationFor(o){
+  const name = (o.customerName||'').trim();
+  if(!name) return 'Guten Tag';
+  const isFrau = /^frau\b/i.test(name);
+  const isHerr = /^herr\b/i.test(name);
+  const parts = name.split(/\s+/);
+  const last = parts[parts.length-1];
+  if(isFrau || isHerr) return `Guten Tag ${isFrau?'Frau':'Herr'} ${last}`;
+  return `Guten Tag ${name}`;
+}
+/* Zwei Varianten je nachdem ob wir den Kundenschlüssel bereits haben - mit
+   Schlüssel braucht es keinen Hinweis, dass der Kunde selbst vor Ort sein muss. */
+function buildTimeNotificationEmail(o){
+  const datumLong = formatDatumLong(targetDatum);
+  const internerHinweis = o.hasKey ? '' : `
+      <p style="margin:0 0 16px">
+        <b>Interne Notiz:</b><br>
+        Sie werden vor Ort sein, um uns den Zutritt gewährleisten zu können.
+      </p>`;
+  const html = `
+    <div style="font-family:Verdana,Geneva,sans-serif;font-size:13px;line-height:1.6;color:#3C3C3B;max-width:560px">
+      <p style="margin:0 0 16px">${salutationFor(o)}</p>
+      <p style="margin:0 0 16px">
+        Die Ersatzreinigung durch unser Springer-Team wird morgen, <b>${datumLong}, um ca. ${o.assignedTime} Uhr</b> erfolgen.
+      </p>
+      <p style="margin:0 0 16px">
+        <b>Bitte beachten Sie, dass es zu Abweichungen bei den Uhrzeiten kommen kann. Wir können nicht garantieren, dass die festgelegte Uhrzeit bestehen bleibt.</b>
+      </p>${internerHinweis}
+      <p style="margin:0 0 4px">Vielen Dank und Freundliche Grüsse</p>
+      <p style="margin:0 0 20px;color:#60BEB3;font-weight:bold">Administration Putzfrauenservice</p>
+      <div style="border-top:1px solid #d8dde0;padding-top:12px;margin-bottom:16px">
+        <p style="margin:0;color:#60BEB3;font-weight:bold">Clean Service Scaramuzzo AG</p>
+        <p style="margin:0;color:#767676">Industriestrasse 5<br>8307 Effretikon<br>0844 355 355</p>
+      </div>
+    </div>`;
+  const subject = `Ihre Reinigung morgen, ${datumLong} – ca. ${o.assignedTime} Uhr`;
+  return { subject, html };
+}
+
+/* Aufträge, die zugeteilt+mit E-Mail sind UND seit der letzten Benachrichtigung
+   eine andere Tour/Uhrzeit bekommen haben (oder noch nie benachrichtigt wurden). */
+function pendingNotifications(){
+  return orders.filter(o=>
+    o.assignedTourId && o.assignedTime && o.customerEmail &&
+    (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime)
+  );
+}
+
+function renderNotifyList(){
+  const pending = pendingNotifications();
+  const listEl = document.getElementById('notifyList');
+  const introEl = document.getElementById('notifyModalIntro');
+  if(pending.length===0){
+    introEl.textContent = 'Keine neuen oder geänderten Zeitmitteilungen zu versenden.';
+    listEl.innerHTML = '';
+    document.getElementById('notifySendBtn').hidden = true;
+    return;
+  }
+  document.getElementById('notifySendBtn').hidden = false;
+  introEl.textContent = `${pending.length} Kunde${pending.length>1?'n':''} erhalten eine E-Mail mit dem morgigen Termin (${formatDatumLong(targetDatum)}):`;
+  listEl.innerHTML = pending.map(o=>{
+    const wasNotified = !!o.notifiedTourId;
+    return `<div class="stopline" style="align-items:flex-start">
+      <span class="swatch" style="background:${o.hasKey?'#60BEB3':'#e0a03a'}"></span>
+      <span class="tm" style="min-width:52px">${o.assignedTime}</span>
+      <span class="ad" style="flex:1">
+        <b>${o.customerName || o.address}</b><br>
+        <span class="muted" style="font-size:12.5px">${o.customerEmail} · ${o.hasKey ? 'Schlüssel vorhanden' : 'Schlüssel nicht vorhanden – Kunde muss vor Ort sein'}${wasNotified ? ' · Aktualisierung (bereits einmal informiert)' : ''}</span>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnReviewNotify').addEventListener('click', ()=>{
+  renderNotifyList();
+  document.getElementById('notifyModal').classList.add('open');
+  document.getElementById('notifyModal').setAttribute('aria-hidden','false');
+  document.getElementById('notifyScrim').classList.add('open');
+});
+function closeNotifyModal(){
+  document.getElementById('notifyModal').classList.remove('open');
+  document.getElementById('notifyModal').setAttribute('aria-hidden','true');
+  document.getElementById('notifyScrim').classList.remove('open');
+}
+document.getElementById('notifyModalClose').addEventListener('click', closeNotifyModal);
+document.getElementById('notifyCancelBtn').addEventListener('click', closeNotifyModal);
+document.getElementById('notifyScrim').addEventListener('click', closeNotifyModal);
+
+document.getElementById('notifySendBtn').addEventListener('click', async ()=>{
+  const pending = pendingNotifications();
+  if(pending.length===0) return;
+  const btn = document.getElementById('notifySendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Wird gesendet …';
+  try{
+    const emails = pending.map(o=>{
+      const { subject, html } = buildTimeNotificationEmail(o);
+      return { to: o.customerEmail, subject, html, auftragNr: o.auftragNr };
+    });
+    const res = await fetch('/api/send-email', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ emails })
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    let okCount=0, failCount=0;
+    (data.results||[]).forEach((r,i)=>{
+      const o = pending[i];
+      if(r.ok){ o.notifiedTourId = o.assignedTourId; o.notifiedTime = o.assignedTime; okCount++; }
+      else { failCount++; }
+    });
+    saveDayState(true);
+    renderAll();
+    closeNotifyModal();
+    toast(failCount>0 ? `${okCount} gesendet, ${failCount} fehlgeschlagen` : `${okCount} Zeitmitteilung${okCount>1?'en':''} gesendet`, failCount>0?'warning':'check');
+  }catch(err){
+    console.error(err);
+    toast('Versand fehlgeschlagen – bitte später erneut versuchen', 'error');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Jetzt senden';
+  }
+});
 
 document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
   if(!listFile || orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
