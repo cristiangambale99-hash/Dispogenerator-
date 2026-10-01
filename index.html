@@ -1807,6 +1807,7 @@ function closeTourMap(){
   document.getElementById('mapModal').classList.remove('open');
   document.getElementById('mapModal').setAttribute('aria-hidden','true');
   document.getElementById('mapScrim').classList.remove('open');
+  currentMapRefresh = null;
 }
 document.getElementById('mapModalClose').addEventListener('click', closeTourMap);
 document.getElementById('mapScrim').addEventListener('click', closeTourMap);
@@ -1842,7 +1843,70 @@ function fmtDuration(min){
   return h>0 ? `${h} Std. ${m} Min.` : `${m} Min.`;
 }
 
-async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute, routeColor }){
+/* Reichhaltiger Popup-Inhalt für Kartenmarker: zeigt dieselben Infos wie die
+   Detailleiste (Adresse, Kunde, Typ, Aufwand, Notizen) UND erlaubt die
+   Tour-/Uhrzeit-Zuteilung direkt über der Karte, ohne die Karte zu verlassen. */
+function mapPopupHtml(o){
+  const tourOptions = tours.map(t=>`<option value="${t.id}" ${o.assignedTourId===t.id?'selected':''}>${t.name}</option>`).join('');
+  return `
+    <div class="map-pop" data-nr="${o.auftragNr}" style="min-width:230px;max-width:260px">
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">${o.auftragNr}${o.extra?' <span class="muted" style="font-weight:400;font-size:11.5px">(neu erkannt)</span>':''}</div>
+      <dl style="display:grid;grid-template-columns:72px 1fr;gap:4px 8px;font-size:12px;margin:0 0 8px">
+        <dt class="muted">Adresse</dt><dd style="margin:0;font-weight:500">${o.address}${o.kanton ? ' <span class="muted" style="font-weight:400">('+o.kanton+')</span>' : ''}</dd>
+        <dt class="muted">Kunde</dt><dd style="margin:0;font-weight:500">${o.customerName || '–'}</dd>
+        <dt class="muted">Typ</dt><dd style="margin:0;font-weight:500">${o.typ || '–'}</dd>
+        <dt class="muted">Aufwand</dt><dd style="margin:0;font-weight:500">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</dd>
+        <dt class="muted">Notizen</dt><dd style="margin:0;font-weight:500">${o.notes || '–'}</dd>
+      </dl>
+      ${tours.length===0 ? '<p class="muted" style="font-size:11.5px;margin:0">Keine Touren angelegt.</p>' : `
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+        <select class="map-pop-tour" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)"><option value="">– Tour wählen –</option>${tourOptions}</select>
+        <input type="time" class="map-pop-time" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-p map-pop-assign" style="padding:6px 10px;font-size:12.5px;flex:1">${o.assignedTourId?'Aktualisieren':'Zuteilen'}</button>
+        ${o.assignedTourId ? '<button class="btn btn-s map-pop-unassign" style="padding:6px 10px;font-size:12.5px">Entfernen</button>' : ''}
+      </div>
+      `}
+    </div>
+  `;
+}
+
+/* Hängt nach jedem Öffnen eines Popups (Leaflet erzeugt das DOM bei jedem
+   Öffnen neu) die Klick-Handler für Zuteilen/Entfernen ein - dieselbe Logik
+   wie im Detail-Panel, nur direkt über der Karte ausgelöst. */
+function wireMapAssignPopup(e, o){
+  const el = e.popup.getElement();
+  if(!el) return;
+  const selectEl = el.querySelector('.map-pop-tour');
+  const timeEl = el.querySelector('.map-pop-time');
+  const assignBtn = el.querySelector('.map-pop-assign');
+  const unassignBtn = el.querySelector('.map-pop-unassign');
+  if(assignBtn){
+    assignBtn.addEventListener('click', ()=>{
+      const tourId = selectEl.value;
+      const time = timeEl.value;
+      if(!tourId){ toast('Bitte eine Tour wählen', 'warning'); return; }
+      if(!time){ toast('Bitte eine Uhrzeit eintragen', 'warning'); return; }
+      o.assignedTourId = tourId;
+      o.assignedTime = time;
+      toast('Auftrag zugeteilt', 'check');
+      renderAll();
+      if(currentMapRefresh) currentMapRefresh();
+    });
+  }
+  if(unassignBtn){
+    unassignBtn.addEventListener('click', ()=>{
+      o.assignedTourId = null; o.assignedTime = null;
+      toast('Zuteilung entfernt', 'check');
+      renderAll();
+      if(currentMapRefresh) currentMapRefresh();
+    });
+  }
+}
+let currentMapRefresh = null;
+
+async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute, routeColor, onPopupOpen }){
   document.getElementById('mapModalTitle').textContent = title;
   const statusEl = document.getElementById('mapModalStatus');
   statusEl.textContent = 'Adressen werden geladen …';
@@ -1882,7 +1946,8 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
       points.push(pt);
       const color = colorFn(o,i);
       const icon = L.divIcon({ className:'', html: labelFn(o,i,color), iconSize:[26,26], iconAnchor:[13,13] });
-      L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer).bindPopup(popupFn(o,i));
+      const marker = L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer).bindPopup(popupFn(o,i), { maxWidth:280, minWidth:230 });
+      if(onPopupOpen) marker.on('popupopen', ev=> onPopupOpen(ev, o));
     } else {
       failed++;
     }
@@ -1920,11 +1985,13 @@ async function openTourMap(tourId){
   if(!t) return;
   const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
   if(items.length===0){ toast('Keine Adressen für diese Tour', 'warning'); return; }
+  currentMapRefresh = ()=> openTourMap(tourId);
   await showMapModal(`${t.name} · ${items.length} Stopp${items.length>1?'s':''}`, items, {
     connectRoute: true,
     colorFn: ()=> t.color,
     labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font:700 12.5px sans-serif;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.45)">${i+1}</div>`,
-    popupFn: (o,i)=> `<b>${i+1}. ${o.customerName || o.address.split(',')[0]}</b><br>${o.address}${o.assignedTime ? '<br>'+o.assignedTime+' Uhr' : ''}`
+    popupFn: (o)=> mapPopupHtml(o),
+    onPopupOpen: (e,o)=> wireMapAssignPopup(e,o)
   });
 }
 
@@ -1934,15 +2001,14 @@ async function openTourMap(tourId){
 async function openAllOrdersMap(){
   const items = filteredOrders();
   if(items.length===0){ toast('Keine Aufträge vorhanden', 'warning'); return; }
+  currentMapRefresh = ()=> openAllOrdersMap();
   await showMapModal(`Alle Aufträge · ${items.length}`, items, {
     connectRoute: true,
     routeColor: '#37474F',
     colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#37474F'; },
     labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};width:18px;height:18px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
-    popupFn: (o)=>{
-      const t = tours.find(x=>x.id===o.assignedTourId);
-      return `<b>${o.auftragNr}</b><br>${o.address}<br>${t ? t.name+(o.assignedTime?' · '+o.assignedTime+' Uhr':'') : '<span style="color:#b8453c">nicht zugeteilt</span>'}`;
-    }
+    popupFn: (o)=> mapPopupHtml(o),
+    onPopupOpen: (e,o)=> wireMapAssignPopup(e,o)
   });
 }
 document.getElementById('btnOrdersMap').addEventListener('click', openAllOrdersMap);
