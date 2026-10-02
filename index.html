@@ -2634,13 +2634,18 @@ function buildTimeNotificationEmail(o){
         <h1 style="margin:0 0 16px;font-size:18px;font-weight:bold;color:#3C3C3B">${heading}</h1>
         <p style="margin:0 0 16px">${salutationFor(o)}</p>
         <p style="margin:0 0 16px">${intro}</p>
-        <table role="presentation" width="100%" style="border-collapse:collapse;background:#f4f6f7;border-left:3px solid #2BB6B7;border-radius:4px;margin:0 0 18px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f4f6f7;border-left:3px solid #2BB6B7;border-radius:4px;margin:0 0 18px">
           <tr>
             <td style="padding:18px 20px">
-              <p style="margin:0 0 14px;color:#767676;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase">Ihre Reinigung</p>
-              <p style="margin:0 0 12px"><span style="display:block;color:#767676;font-size:11.5px">Datum</span><span style="display:block;color:#3C3C3B;font-weight:bold">${datumLong}</span></p>
-              <p style="margin:0 0 12px"><span style="display:block;color:#767676;font-size:11.5px">Uhrzeit</span><span style="display:block;color:#3C3C3B;font-weight:bold">ca. ${o.assignedTime} Uhr</span></p>
-              <p style="margin:0"><span style="display:block;color:#767676;font-size:11.5px">Adresse</span><span style="display:block;color:#3C3C3B;font-weight:bold">${o.address || '–'}</span></p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+                <tr><td colspan="2" style="padding:0 0 14px;color:#767676;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase">Ihre Reinigung</td></tr>
+                <tr><td style="padding:0 0 2px;color:#767676;font-size:11.5px;line-height:1.4">Datum</td></tr>
+                <tr><td style="padding:0 0 12px;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">${datumLong}</td></tr>
+                <tr><td style="padding:0 0 2px;color:#767676;font-size:11.5px;line-height:1.4">Uhrzeit</td></tr>
+                <tr><td style="padding:0 0 12px;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">ca. ${o.assignedTime} Uhr</td></tr>
+                <tr><td style="padding:0 0 2px;color:#767676;font-size:11.5px;line-height:1.4">Adresse</td></tr>
+                <tr><td style="padding:0;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">${o.address || '–'}</td></tr>
+              </table>
             </td>
           </tr>
         </table>
@@ -2706,32 +2711,130 @@ function pendingNotifications(){
   );
 }
 
+/* notifyBatch ist null, solange nur die Vorschau gezeigt wird. Sobald
+   "Jetzt senden" gedrückt wurde, hält notifyBatch den Versandstand jedes
+   einzelnen Empfängers fest (sending/sent/failed), damit Loris nach dem
+   Versand sofort sieht, welche Zeitmitteilungen zu 100% angekommen sind
+   und welche hängengeblieben sind - inklusive manuellem Einzel-Retry für
+   genau die fehlgeschlagenen, statt den ganzen Vorgang neu zu starten. */
+let notifyBatch = null;
+
+async function sendNotificationEmails(items){
+  const ccPfs = ccPfsEnabled();
+  const emails = items.map(o=>{
+    const { subject, html } = buildTimeNotificationEmail(o);
+    return { to: o.customerEmail, subject, html, auftragNr: o.auftragNr, cc: ccPfs ? [CC_PFS_ADDRESS] : undefined };
+  });
+  const res = await fetch('/api/send-email', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ emails })
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const data = await res.json();
+  return data.results || [];
+}
+
+function notifyRowHtml(o, statusHtml, swatchColor){
+  const wasNotified = !!o.notifiedTourId;
+  return `<div class="stopline" style="align-items:flex-start">
+    <span class="swatch" style="background:${swatchColor}"></span>
+    <span class="tm" style="min-width:52px">${o.assignedTime}</span>
+    <span class="ad" style="flex:1">
+      <b>${o.customerName || o.address}</b><br>
+      <span class="muted" style="font-size:12.5px">${o.customerEmail} · ${o.hasKey ? 'Schlüssel vorhanden' : 'Schlüssel nicht vorhanden – Kunde muss vor Ort sein'}${wasNotified ? ' · Aktualisierung (bereits einmal informiert)' : ''}</span>
+      ${statusHtml ? `<br>${statusHtml}` : ''}
+    </span>
+  </div>`;
+}
+
 function renderNotifyList(){
-  const pending = pendingNotifications();
   const listEl = document.getElementById('notifyList');
   const introEl = document.getElementById('notifyModalIntro');
+  const sendBtn = document.getElementById('notifySendBtn');
+  const cancelBtn = document.getElementById('notifyCancelBtn');
+
+  if(notifyBatch){
+    const okCount = notifyBatch.filter(e=>e.status==='sent').length;
+    const failCount = notifyBatch.filter(e=>e.status==='failed').length;
+    const sendingCount = notifyBatch.filter(e=>e.status==='sending').length;
+    if(sendingCount>0){
+      introEl.textContent = `Versand läuft … (${okCount+failCount}/${notifyBatch.length} erledigt)`;
+    } else if(failCount>0){
+      introEl.textContent = `${okCount} von ${notifyBatch.length} Zeitmitteilungen zu 100% versendet. ${failCount} hängen geblieben – bitte einzeln erneut senden.`;
+    } else {
+      introEl.textContent = `Alle ${okCount} Zeitmitteilung${okCount>1?'en':''} wurden zu 100% versendet.`;
+    }
+    listEl.innerHTML = notifyBatch.map((entry,idx)=>{
+      const statusHtml = entry.status==='sending'
+        ? `<span class="muted" style="font-size:12.5px">Wird gesendet …</span>`
+        : entry.status==='sent'
+          ? `<span style="color:#1B8384;font-weight:600;font-size:12.5px">✓ Gesendet</span>`
+          : `<span style="color:#b84a3e;font-weight:600;font-size:12.5px">✗ Hängen geblieben</span> <button type="button" class="btn btn-s" data-retry-idx="${idx}" style="padding:3px 10px;font-size:12px;margin-left:8px">Erneut senden</button>`;
+      const swatchColor = entry.status==='sent' ? '#60BEB3' : entry.status==='failed' ? '#d9796c' : '#c7cfd2';
+      return notifyRowHtml(entry.o, statusHtml, swatchColor);
+    }).join('');
+    if(failCount>1){
+      listEl.insertAdjacentHTML('afterbegin', `<button type="button" class="btn btn-s" id="notifyRetryAllBtn" style="margin-bottom:12px">Alle hängengebliebenen erneut senden</button>`);
+      document.getElementById('notifyRetryAllBtn').addEventListener('click', ()=> retryAllFailed());
+    }
+    listEl.querySelectorAll('[data-retry-idx]').forEach(btn=>{
+      btn.addEventListener('click', ()=> retryNotify(parseInt(btn.getAttribute('data-retry-idx'),10)));
+    });
+    sendBtn.hidden = true;
+    cancelBtn.textContent = sendingCount>0 ? 'Abbrechen' : (failCount>0 ? 'Schliessen' : 'Fertig');
+    return;
+  }
+
+  const pending = pendingNotifications();
   if(pending.length===0){
     introEl.textContent = 'Keine neuen oder geänderten Zeitmitteilungen zu versenden.';
     listEl.innerHTML = '';
-    document.getElementById('notifySendBtn').hidden = true;
+    sendBtn.hidden = true;
+    cancelBtn.textContent = 'Abbrechen';
     return;
   }
-  document.getElementById('notifySendBtn').hidden = false;
+  sendBtn.hidden = false;
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Jetzt senden';
+  cancelBtn.textContent = 'Abbrechen';
   introEl.textContent = `${pending.length} Kunde${pending.length>1?'n':''} erhalten eine E-Mail mit dem morgigen Termin (${formatDatumLong(targetDatum)}):`;
-  listEl.innerHTML = pending.map(o=>{
-    const wasNotified = !!o.notifiedTourId;
-    return `<div class="stopline" style="align-items:flex-start">
-      <span class="swatch" style="background:${o.hasKey?'#60BEB3':'#e0a03a'}"></span>
-      <span class="tm" style="min-width:52px">${o.assignedTime}</span>
-      <span class="ad" style="flex:1">
-        <b>${o.customerName || o.address}</b><br>
-        <span class="muted" style="font-size:12.5px">${o.customerEmail} · ${o.hasKey ? 'Schlüssel vorhanden' : 'Schlüssel nicht vorhanden – Kunde muss vor Ort sein'}${wasNotified ? ' · Aktualisierung (bereits einmal informiert)' : ''}</span>
-      </span>
-    </div>`;
-  }).join('');
+  listEl.innerHTML = pending.map(o=> notifyRowHtml(o, '', o.hasKey?'#60BEB3':'#e0a03a')).join('');
+}
+
+async function sendBatch(){
+  const toSend = notifyBatch.filter(e=>e.status==='sending');
+  if(toSend.length===0) return;
+  try{
+    const results = await sendNotificationEmails(toSend.map(e=>e.o));
+    results.forEach((r,i)=>{
+      const entry = toSend[i];
+      if(r.ok){ entry.o.notifiedTourId = entry.o.assignedTourId; entry.o.notifiedTime = entry.o.assignedTime; entry.status='sent'; }
+      else { entry.status='failed'; }
+    });
+  }catch(err){
+    console.error(err);
+    toSend.forEach(e=> e.status='failed');
+  }
+  saveDayState(true);
+  renderAll();
+  renderNotifyList();
+}
+
+function retryNotify(idx){
+  if(!notifyBatch || !notifyBatch[idx]) return;
+  notifyBatch[idx].status = 'sending';
+  renderNotifyList();
+  sendBatch();
+}
+
+function retryAllFailed(){
+  if(!notifyBatch) return;
+  notifyBatch.forEach(e=>{ if(e.status==='failed') e.status='sending'; });
+  renderNotifyList();
+  sendBatch();
 }
 
 document.getElementById('btnReviewNotify').addEventListener('click', ()=>{
+  notifyBatch = null;
   renderNotifyList();
   document.getElementById('notifyModal').classList.add('open');
   document.getElementById('notifyModal').setAttribute('aria-hidden','false');
@@ -2741,45 +2844,18 @@ function closeNotifyModal(){
   document.getElementById('notifyModal').classList.remove('open');
   document.getElementById('notifyModal').setAttribute('aria-hidden','true');
   document.getElementById('notifyScrim').classList.remove('open');
+  notifyBatch = null;
 }
 document.getElementById('notifyModalClose').addEventListener('click', closeNotifyModal);
 document.getElementById('notifyCancelBtn').addEventListener('click', closeNotifyModal);
 document.getElementById('notifyScrim').addEventListener('click', closeNotifyModal);
 
-document.getElementById('notifySendBtn').addEventListener('click', async ()=>{
+document.getElementById('notifySendBtn').addEventListener('click', ()=>{
   const pending = pendingNotifications();
   if(pending.length===0) return;
-  const btn = document.getElementById('notifySendBtn');
-  btn.disabled = true;
-  btn.textContent = 'Wird gesendet …';
-  try{
-    const ccPfs = ccPfsEnabled();
-    const emails = pending.map(o=>{
-      const { subject, html } = buildTimeNotificationEmail(o);
-      return { to: o.customerEmail, subject, html, auftragNr: o.auftragNr, cc: ccPfs ? [CC_PFS_ADDRESS] : undefined };
-    });
-    const res = await fetch('/api/send-email', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ emails })
-    });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    let okCount=0, failCount=0;
-    (data.results||[]).forEach((r,i)=>{
-      const o = pending[i];
-      if(r.ok){ o.notifiedTourId = o.assignedTourId; o.notifiedTime = o.assignedTime; okCount++; }
-      else { failCount++; }
-    });
-    saveDayState(true);
-    renderAll();
-    closeNotifyModal();
-    toast(failCount>0 ? `${okCount} gesendet, ${failCount} fehlgeschlagen` : `${okCount} Zeitmitteilung${okCount>1?'en':''} gesendet`, failCount>0?'warning':'check');
-  }catch(err){
-    console.error(err);
-    toast('Versand fehlgeschlagen – bitte später erneut versuchen', 'error');
-  }finally{
-    btn.disabled = false;
-    btn.textContent = 'Jetzt senden';
-  }
+  notifyBatch = pending.map(o=>({ o, status:'sending' }));
+  renderNotifyList();
+  sendBatch();
 });
 
 document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
