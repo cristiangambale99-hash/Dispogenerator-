@@ -1852,16 +1852,54 @@ function renderSavedDays(){
 let geocodeCache = (()=>{ try{ const raw = localStorage.getItem('cs-dispo-geocode'); return raw ? JSON.parse(raw) : {}; }catch(e){ return {}; } })();
 function saveGeocodeCache(){ try{ localStorage.setItem('cs-dispo-geocode', JSON.stringify(geocodeCache)); }catch(e){} }
 let lastGeocodeAt = 0;
-async function geocodeAddress(address){
-  const key = address.trim().toLowerCase();
-  if(key in geocodeCache) return geocodeCache[key];
+/* Zerlegt "Strasse Nr, PLZ Ort" in die Einzelteile für eine strukturierte
+   Nominatim-Anfrage. Eine freie Texteingabe ("q=...") lässt Nominatim raten,
+   was Strasse/PLZ/Ort ist, und kann bei ähnlich benannten Strassen in
+   verschiedenen Orten die falsche, nur ungefähr passende Adresse treffen -
+   mit strukturierten Feldern (street/postalcode/city) wird exakt nach der
+   Hausnummer in genau diesem Ort gesucht, was für die Fahrzeit-Berechnung
+   (Adresse zu Adresse) entscheidend genauer ist. */
+function splitAddressParts(address){
+  const parts = address.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length>=2){
+    const street = parts.slice(0,-1).join(', ');
+    const plzOrtMatch = parts[parts.length-1].match(/^(\d{4})\s+(.+)$/);
+    if(plzOrtMatch) return { street, postalcode: plzOrtMatch[1], city: plzOrtMatch[2] };
+    return { street, postalcode:'', city: parts[parts.length-1] };
+  }
+  const plzOrtMatch = address.match(/^(\d{4})\s+(.+)$/);
+  if(plzOrtMatch) return { street:'', postalcode: plzOrtMatch[1], city: plzOrtMatch[2] };
+  return { street: address, postalcode:'', city:'' };
+}
+async function nominatimRequest(params){
   const wait = 1000 - (Date.now() - lastGeocodeAt);
   if(wait > 0) await new Promise(r=> setTimeout(r, wait));
   lastGeocodeAt = Date.now();
-  const q = encodeURIComponent(address + ', Schweiz');
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ch&q=${q}`);
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
   if(!res.ok) throw new Error('Geocoding fehlgeschlagen');
-  const data = await res.json();
+  return res.json();
+}
+async function geocodeAddress(address){
+  /* "v2:"-Präfix: macht alle vor dieser Änderung mit der ungenauen
+     Freitext-Suche gespeicherten Koordinaten ungültig, damit jede Adresse
+     einmalig mit der neuen, präziseren strukturierten Suche neu geokodiert
+     wird - sonst würde eine früher leicht falsch getroffene Adresse (z.B.
+     eine andere Strasse gleichen Namens) für immer im Cache hängen bleiben. */
+  const key = 'v2:' + address.trim().toLowerCase();
+  if(key in geocodeCache) return geocodeCache[key];
+  const { street, postalcode, city } = splitAddressParts(address);
+  let data = [];
+  if(street && city){
+    const structured = `format=json&limit=1&countrycodes=ch&addressdetails=1&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}${postalcode?`&postalcode=${encodeURIComponent(postalcode)}`:''}&country=Schweiz`;
+    data = await nominatimRequest(structured);
+  }
+  if(!data.length){
+    /* Fallback auf Freitext, falls die strukturierte Suche nichts findet
+       (z.B. bei unüblich geschriebenen Adressen) - besser eine ungefähre
+       Position als gar keine. */
+    const q = `format=json&limit=1&countrycodes=ch&q=${encodeURIComponent(address + ', Schweiz')}`;
+    data = await nominatimRequest(q);
+  }
   const point = data.length ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
   geocodeCache[key] = point;
   saveGeocodeCache();
