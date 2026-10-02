@@ -1993,10 +1993,7 @@ function mapPopupHtml(o){
       ${tours.length===0 ? '<p class="muted" style="font-size:11.5px;margin:0">Keine Touren angelegt.</p>' : `
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
         <select class="map-pop-tour" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)"><option value="">– Tour wählen –</option>${tourOptions}</select>
-        <div style="display:flex;gap:6px">
-          <input type="number" min="1" step="1" inputmode="numeric" placeholder="Nr." title="Reihenfolge innerhalb der Tour" class="map-pop-stopnr" style="width:54px;flex:0 0 54px;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.stopNr!=null?o.stopNr:''}">
-          <input type="text" inputmode="numeric" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" maxlength="5" placeholder="HH:MM (auto)" title="Optional - wird bei Nr. automatisch berechnet" class="time-ch map-pop-time" style="flex:1 1 auto;min-width:0;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
-        </div>
+        <input type="number" min="1" step="1" inputmode="numeric" placeholder="Nr. (Reihenfolge in der Tour)" title="Reihenfolge innerhalb der Tour - die Uhrzeit wird daraus automatisch berechnet" class="map-pop-stopnr" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.stopNr!=null?o.stopNr:''}">
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-p map-pop-assign" style="padding:6px 10px;font-size:12.5px;flex:1">${o.assignedTourId?'Aktualisieren':'Zuteilen'}</button>
@@ -2014,30 +2011,26 @@ function wireMapAssignPopup(e, o){
   const el = e.popup.getElement();
   if(!el) return;
   const selectEl = el.querySelector('.map-pop-tour');
-  const timeEl = el.querySelector('.map-pop-time');
   const stopNrEl = el.querySelector('.map-pop-stopnr');
   const assignBtn = el.querySelector('.map-pop-assign');
   const unassignBtn = el.querySelector('.map-pop-unassign');
   if(assignBtn){
     assignBtn.addEventListener('click', ()=>{
       const tourId = selectEl.value;
-      const time = timeEl.value;
       const nRaw = stopNrEl ? parseInt(stopNrEl.value, 10) : NaN;
       const stopNr = Number.isFinite(nRaw) && nRaw>0 ? nRaw : null;
       if(!tourId){ toast('Bitte eine Tour wählen', 'warning'); return; }
       o.assignedTourId = tourId;
       o.stopNr = stopNr;
-      if(time){
-        o.assignedTime = time;
-      } else if(!o.assignedTime){
-        /* Uhrzeit ist bewusst NICHT Pflicht: der Normalfall ist, dass Loris
-           nur Tour + Nr. (Reihenfolge) einträgt. Damit Touren-Übersicht und
-           PDF-Erstellung trotzdem eine Zeit haben, bekommt der Auftrag eine
-           grobe Platzhalter-Zeit direkt nach dem letzten bereits zugeteilten
-           Stopp dieser Tour (bzw. 08:00, wenn die Tour noch leer ist) - die
-           anschliessende Berechnung über "Zeiten anhand Stopp-Nr. & Fahrzeit
-           berechnen" ersetzt sie dann durch die exakte, auf der echten
-           Fahrzeit basierende Uhrzeit. */
+      /* Keine Uhrzeit-Eingabe hier - Loris teilt nur Tour + Nr. (Reihenfolge)
+         zu, die Uhrzeit kommt aus der automatischen Berechnung. Damit
+         Touren-Übersicht und PDF-Erstellung trotzdem sofort eine gültige
+         Zeit haben, bekommt der Auftrag eine grobe Platzhalter-Zeit direkt
+         nach dem letzten bereits zugeteilten Stopp dieser Tour (bzw. 08:00,
+         wenn die Tour noch leer ist) - "Zeiten anhand Stopp-Nr. & Fahrzeit
+         berechnen" ersetzt sie danach durch die exakte, auf der echten
+         Fahrzeit basierende Uhrzeit. */
+      if(!o.assignedTime){
         const siblings = orders.filter(x=> x.assignedTourId===tourId && x.auftragNr!==o.auftragNr && x.assignedTime);
         const latestMin = siblings.reduce((m,x)=> Math.max(m, timeToMin(x.assignedTime)), -1);
         o.assignedTime = latestMin>=0 ? minToTime(latestMin+15) : '08:00';
