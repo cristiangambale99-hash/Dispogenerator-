@@ -1923,7 +1923,10 @@ document.getElementById('btnRecalcTimes').addEventListener('click', async ()=>{
       const aufwandMin = cur.aufwand!=null ? cur.aufwand*60 : 0;
       const travelMin = route.legs[i].durationMin;
       cursor += aufwandMin + travelMin;
-      seq[i+1].assignedTime = minToTime(Math.round(cursor/5)*5);
+      /* Auf 15 Minuten runden (Kunden erwarten runde Zeitfenster wie 11:00
+         statt 10:55) - Loris kann jede berechnete Zeit danach im Popup
+         trotzdem manuell auf die Minute genau anpassen. */
+      seq[i+1].assignedTime = minToTime(Math.round(cursor/15)*15);
     }
     saveDayState(true);
     renderAll();
