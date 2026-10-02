@@ -1103,6 +1103,7 @@ td .name{font-weight:600}
   </div>
   <div id="tourMapEl"></div>
   <div id="mapModalStatus" class="muted" style="font-size:12.5px"></div>
+  <div id="tourTimeline" style="display:none;max-height:220px;overflow-y:auto;border-top:1px solid var(--cs-line)"></div>
   <div id="mapModalActions" style="padding:10px 20px;border-top:1px solid var(--cs-line);display:none">
     <button class="btn btn-s" id="btnRecalcTimes" style="width:100%">Zeiten anhand Stopp-Nr. &amp; Fahrzeit berechnen</button>
   </div>
@@ -2137,6 +2138,28 @@ function sortByStopOrder(items){
   });
 }
 
+/* Tourplan-Liste direkt unter der Karte: zeigt auf einen Blick, um welche
+   Uhrzeit die Tour bei welchem Kunden ist (Reihenfolge nach Stopp-Nr., sonst
+   Uhrzeit) - unabhängig vom Geokodieren sofort verfügbar, und nach "Zeiten
+   berechnen" automatisch aktuell. */
+function renderTourTimeline(items){
+  const el = document.getElementById('tourTimeline');
+  if(!items || items.length===0){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="muted" style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:10px 20px 6px">Tourplan – wann bei welchem Kunden</div>` +
+    items.map((o,i)=>{
+      const hasTime = !!o.assignedTime;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 20px;border-top:1px solid var(--cs-line)">
+        <span style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--cs-brand,#2BB6B7);color:#1F2A2B;font:700 11px sans-serif;display:flex;align-items:center;justify-content:center">${o.stopNr!=null?o.stopNr:i+1}</span>
+        <span style="flex:0 0 46px;font-weight:700;font-size:12.5px;color:${hasTime?'#3C3C3B':'#b84a3e'}">${o.assignedTime || '–:–'}</span>
+        <span style="flex:1;min-width:0;overflow:hidden">
+          <b style="font-size:12.5px">${o.customerName || o.address.split(',')[0]}</b><br>
+          <span class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">${o.address}</span>
+        </span>
+      </div>`;
+    }).join('');
+}
+
 async function openTourMap(tourId){
   const t = tours.find(x=>x.id===tourId);
   if(!t) return;
@@ -2145,6 +2168,7 @@ async function openTourMap(tourId){
   currentMapRefresh = ()=> openTourMap(tourId);
   currentMapTourId = tourId;
   document.getElementById('mapModalActions').style.display = items.length>=2 ? 'block' : 'none';
+  renderTourTimeline(items);
   await showMapModal(`${t.name} · ${items.length} Stopp${items.length>1?'s':''}`, items, {
     connectRoute: true,
     colorFn: ()=> t.color,
@@ -2163,6 +2187,7 @@ async function openAllOrdersMap(){
   currentMapRefresh = ()=> openAllOrdersMap();
   currentMapTourId = null;
   document.getElementById('mapModalActions').style.display = 'none';
+  renderTourTimeline(null);
   await showMapModal(`Alle Aufträge · ${items.length}`, items, {
     connectRoute: true,
     routeColor: '#37474F',
