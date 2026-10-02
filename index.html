@@ -1899,10 +1899,11 @@ document.getElementById('btnRecalcTimes').addEventListener('click', async ()=>{
     return;
   }
   const seq = all.slice().sort((a,b)=>a.stopNr-b.stopNr);
-  if(!seq[0].assignedTime){
-    toast('Bitte beim 1. Stopp eine Start-Uhrzeit eintragen', 'warning');
-    return;
-  }
+  /* Auch der 1. Stopp braucht keine manuelle Uhrzeit mehr - ohne Eingabe wird
+     als Tour-Start 08:00 angenommen (üblicher Arbeitsbeginn). Loris sieht das
+     Ergebnis danach im Tourplan und kann es jederzeit manuell anpassen. */
+  const usedDefaultStart = !seq[0].assignedTime;
+  if(usedDefaultStart) seq[0].assignedTime = '08:00';
   statusEl.textContent = 'Fahrzeiten zwischen den Stopps werden berechnet …';
   try{
     const points = [];
@@ -1930,7 +1931,7 @@ document.getElementById('btnRecalcTimes').addEventListener('click', async ()=>{
     }
     saveDayState(true);
     renderAll();
-    statusEl.textContent = `Zeiten für ${seq.length} Stopps anhand Reihenfolge & Fahrzeit berechnet.`;
+    statusEl.textContent = `Zeiten für ${seq.length} Stopps anhand Reihenfolge & Fahrzeit berechnet.${usedDefaultStart ? ' Start beim 1. Stopp auf 08:00 angenommen – bei Bedarf im Popup anpassen.' : ''}`;
     toast('Zeiten berechnet', 'check');
     if(currentMapRefresh) currentMapRefresh();
   }catch(err){
@@ -1994,7 +1995,7 @@ function mapPopupHtml(o){
         <select class="map-pop-tour" style="width:100%;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)"><option value="">– Tour wählen –</option>${tourOptions}</select>
         <div style="display:flex;gap:6px">
           <input type="number" min="1" step="1" inputmode="numeric" placeholder="Nr." title="Reihenfolge innerhalb der Tour" class="map-pop-stopnr" style="width:54px;flex:0 0 54px;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.stopNr!=null?o.stopNr:''}">
-          <input type="text" inputmode="numeric" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" maxlength="5" placeholder="HH:MM" class="time-ch map-pop-time" style="flex:1 1 auto;min-width:0;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
+          <input type="text" inputmode="numeric" pattern="^([01][0-9]|2[0-3]):[0-5][0-9]$" maxlength="5" placeholder="HH:MM (auto)" title="Optional - wird bei Nr. automatisch berechnet" class="time-ch map-pop-time" style="flex:1 1 auto;min-width:0;font-size:12.5px;padding:5px 7px;border-radius:7px;border:1px solid var(--cs-line,#d8dde0)" value="${o.assignedTime || (o.zeit?o.zeit.von:'')}">
         </div>
       </div>
       <div style="display:flex;gap:6px">
@@ -2021,13 +2022,25 @@ function wireMapAssignPopup(e, o){
     assignBtn.addEventListener('click', ()=>{
       const tourId = selectEl.value;
       const time = timeEl.value;
+      const nRaw = stopNrEl ? parseInt(stopNrEl.value, 10) : NaN;
+      const stopNr = Number.isFinite(nRaw) && nRaw>0 ? nRaw : null;
       if(!tourId){ toast('Bitte eine Tour wählen', 'warning'); return; }
-      if(!time){ toast('Bitte eine Uhrzeit eintragen', 'warning'); return; }
       o.assignedTourId = tourId;
-      o.assignedTime = time;
-      if(stopNrEl){
-        const n = parseInt(stopNrEl.value, 10);
-        o.stopNr = Number.isFinite(n) && n>0 ? n : null;
+      o.stopNr = stopNr;
+      if(time){
+        o.assignedTime = time;
+      } else if(!o.assignedTime){
+        /* Uhrzeit ist bewusst NICHT Pflicht: der Normalfall ist, dass Loris
+           nur Tour + Nr. (Reihenfolge) einträgt. Damit Touren-Übersicht und
+           PDF-Erstellung trotzdem eine Zeit haben, bekommt der Auftrag eine
+           grobe Platzhalter-Zeit direkt nach dem letzten bereits zugeteilten
+           Stopp dieser Tour (bzw. 08:00, wenn die Tour noch leer ist) - die
+           anschliessende Berechnung über "Zeiten anhand Stopp-Nr. & Fahrzeit
+           berechnen" ersetzt sie dann durch die exakte, auf der echten
+           Fahrzeit basierende Uhrzeit. */
+        const siblings = orders.filter(x=> x.assignedTourId===tourId && x.auftragNr!==o.auftragNr && x.assignedTime);
+        const latestMin = siblings.reduce((m,x)=> Math.max(m, timeToMin(x.assignedTime)), -1);
+        o.assignedTime = latestMin>=0 ? minToTime(latestMin+15) : '08:00';
       }
       toast('Auftrag zugeteilt', 'check');
       renderAll();
