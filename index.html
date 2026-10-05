@@ -2997,6 +2997,14 @@ async function generateFilledPdf(){
     cursorY -= 26;
   }
 
+  /* Die ORIGINAL-Dispositionsliste druckt am Seitenende bereits ihre eigene
+     "Legende Routen:" (Aduna-Export, inkl. km-Angaben). Unsere eigene, live
+     berechnete Legende (Touren/Schlüssel/Ferien) kann je nach Zeilenanzahl
+     genau auf dieser Höhe landen und sich sonst ungelesen mit dem Original
+     überlagern - darum den ganzen Fusszeilen-Bereich zuerst mit Weiss
+     überdecken, bevor sauber und übersichtlich neu darüber geschrieben wird. */
+  targetPage.drawRectangle({ x:40, y:15, width:515, height:Math.max(cursorY+34-15, 0), color:rgb(1,1,1) });
+
   cursorY -= 14;
   targetPage.drawText('Legende Touren:', { x:42.5, y:cursorY, size:8, font:fontBold, color:rgb(0,0,0) });
   cursorY -= 14;
@@ -3010,6 +3018,39 @@ async function generateFilledPdf(){
     targetPage.drawText(`${t.name}  (${fmtHoursShort(totalMin)})`, { x:56, y:cursorY+1, size:7.5, font:fontReg, color:rgb(0,0,0) });
     cursorY -= 12;
   });
+
+  /* Schlüssel-Legende: Badge nochmals erklärt + Liste aller Auftragsnummern
+     des Tages, bei denen Loris "Schlüssel vorhanden" angekreuzt hat - damit
+     auf der PDF auf einen Blick ersichtlich ist, bei welchen Aufträgen
+     insgesamt ein Schlüssel vorliegt, nicht nur zeilenweise erkennbar. */
+  const keyOrders = orders.filter(o=>o.hasKey);
+  if(keyOrders.length>0){
+    cursorY -= 8;
+    if(cursorY < 40) cursorY = 40;
+    drawKeyBadge(targetPage, 46.5, cursorY+4, rgb);
+    targetPage.drawText('Schlüssel vorhanden:', { x:60, y:cursorY+1, size:8, font:fontBold, color:rgb(0,0,0) });
+    cursorY -= 14;
+    const keyNrText = keyOrders.map(o=>o.auftragNr).join(', ');
+    const maxLineWidth = 500;
+    const words = keyNrText.split(', ');
+    const keyLines = [];
+    let line = '';
+    words.forEach(w=>{
+      const candidate = line ? `${line}, ${w}` : w;
+      if(line && fontReg.widthOfTextAtSize(candidate, 7.5) > maxLineWidth){
+        keyLines.push(line);
+        line = w;
+      } else {
+        line = candidate;
+      }
+    });
+    if(line) keyLines.push(line);
+    keyLines.forEach(l=>{
+      if(cursorY < 30) return;
+      targetPage.drawText(l, { x:56, y:cursorY, size:7.5, font:fontReg, color:rgb(0,0,0) });
+      cursorY -= 12;
+    });
+  }
 
   if(absenceOrders.length>0){
     cursorY -= 8;
