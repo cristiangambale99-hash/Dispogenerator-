@@ -2867,6 +2867,26 @@ document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
   }
 });
 
+/* Schlüssel-Badge fürs Dispo-PDF (von Cristian anhand 3 Varianten als
+   "Badge-Kreis" gewählt): gefüllter Türkis-Kreis mit stilisiertem weissem
+   Schlüssel-Symbol, zwischen Auftragsnummer und Adresse platziert - erscheint
+   nur, wenn Loris vor dem Senden der Zeitmitteilung "Schlüssel vorhanden"
+   angekreuzt hat (o.hasKey). Rein aus Grundformen (Kreis/Rechteck) statt
+   SVG-Pfad aufgebaut, damit es bei pdf-lib in der winzigen Druckgrösse
+   garantiert sauber und seitenrichtig rendert. */
+function drawKeyBadge(page, cx, cy, rgbFn){
+  const col = hexToRgb01('#2BB6B7');
+  const white = rgbFn(1,1,1);
+  const brand = rgbFn(col.r, col.g, col.b);
+  page.drawEllipse({ x:cx, y:cy, xScale:4.6, yScale:4.6, color: brand });
+  const bowCx = cx - 1.9, bowCy = cy;
+  page.drawEllipse({ x:bowCx, y:bowCy, xScale:1.55, yScale:1.55, color: white });
+  page.drawEllipse({ x:bowCx, y:bowCy, xScale:0.7, yScale:0.7, color: brand });
+  page.drawRectangle({ x:bowCx+0.9, y:cy-0.45, width:3.3, height:0.9, color: white });
+  page.drawRectangle({ x:cx+1.5, y:cy-1.8, width:0.75, height:1.35, color: white });
+  page.drawRectangle({ x:cx+2.6, y:cy-1.45, width:0.75, height:1.0, color: white });
+}
+
 async function generateFilledPdf(){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   const pdfDoc = await PDFDocument.load(listFile.buf.slice(0));
@@ -2908,6 +2928,7 @@ async function generateFilledPdf(){
 
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
+    if(o.hasKey) drawKeyBadge(page, X_ADDRESS-9, row.y+3, rgb);
     pendingTexts.push(()=>{
       page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
       page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
@@ -2946,6 +2967,7 @@ async function generateFilledPdf(){
     const end = start + dur;
     targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
     targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    if(o.hasKey) drawKeyBadge(targetPage, X_ADDRESS-9, cursorY+3, rgb);
     targetPage.drawText(o.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
@@ -2966,6 +2988,7 @@ async function generateFilledPdf(){
   for(const o of open){
     targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
     targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
+    if(o.hasKey) drawKeyBadge(targetPage, X_ADDRESS-9, cursorY+3, rgb);
     targetPage.drawText(o.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText('NICHT ZUGETEILT', { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(0.7,0.1,0.1) });
