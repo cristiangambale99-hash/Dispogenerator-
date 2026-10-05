@@ -3029,8 +3029,18 @@ async function generateFilledPdf(){
      Auftragsnummer jeweils in der Farbe der zugeteilten Tour, direkt
      nebeneinander (wie Loris es in der Zeile oben auch sieht). So ist pro
      Zeile sofort erkennbar, welcher Tour der Schlüssel-Auftrag gehört, statt
-     alle Nummern in einer gemeinsamen, schwerer zuordenbaren Liste. */
-  const keyOrders = orders.filter(o=>o.hasKey);
+     alle Nummern in einer gemeinsamen, schwerer zuordenbaren Liste.
+     Nach Tour gruppiert (erst alle einer Farbe, dann die nächste, in der
+     Reihenfolge der Touren-Legende darüber) statt in Dispo-Reihenfolge, die
+     je nach Zuteilung munter zwischen den Tourfarben hin- und herspringt
+     und so unübersichtlich wirkt. Aufträge ohne Tour (Fallback-Türkis)
+     kommen ans Ende. */
+  const tourOrderIndex = new Map(tours.map((t, i)=>[t.id, i]));
+  const keyOrders = orders.filter(o=>o.hasKey).slice().sort((a, b)=>{
+    const ia = tourOrderIndex.has(a.assignedTourId) ? tourOrderIndex.get(a.assignedTourId) : tours.length;
+    const ib = tourOrderIndex.has(b.assignedTourId) ? tourOrderIndex.get(b.assignedTourId) : tours.length;
+    return ia - ib;
+  });
   if(keyOrders.length>0){
     cursorY -= 8;
     if(cursorY < 40) cursorY = 40;
