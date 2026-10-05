@@ -3025,47 +3025,24 @@ async function generateFilledPdf(){
     cursorY -= 12;
   });
 
-  /* Schlüssel-Legende: Badge nochmals erklärt + Liste aller Auftragsnummern
-     des Tages, bei denen Loris "Schlüssel vorhanden" angekreuzt hat - damit
-     auf der PDF auf einen Blick ersichtlich ist, bei welchen Aufträgen
-     insgesamt ein Schlüssel vorliegt, nicht nur zeilenweise erkennbar. */
+  /* Schlüssel-Legende: eine eigene Zeile pro Auftrag mit Schlüssel - Badge UND
+     Auftragsnummer jeweils in der Farbe der zugeteilten Tour, direkt
+     nebeneinander (wie Loris es in der Zeile oben auch sieht). So ist pro
+     Zeile sofort erkennbar, welcher Tour der Schlüssel-Auftrag gehört, statt
+     alle Nummern in einer gemeinsamen, schwerer zuordenbaren Liste. */
   const keyOrders = orders.filter(o=>o.hasKey);
   if(keyOrders.length>0){
     cursorY -= 8;
     if(cursorY < 40) cursorY = 40;
-    drawKeyBadge(targetPage, 46.5, cursorY+4, rgb);
-    targetPage.drawText('Schlüssel vorhanden:', { x:60, y:cursorY+1, size:8, font:fontBold, color:rgb(0,0,0) });
-    cursorY -= 14;
-    /* Jede Auftragsnummer in der Farbe ihrer eigenen Tour (wie der Badge in
-       der Zeile oben) statt einheitlich Schwarz - so ist auch hier auf
-       einen Blick erkennbar, welcher Tour ein Schlüssel-Auftrag gehört,
-       ohne dass man in der Liste weiter oben nachschauen muss. Dafür wird
-       jede Nummer einzeln gezeichnet (mit eigener Farbe) statt als ein
-       durchgehender String - der Zeilenumbruch misst die Breite deshalb
-       token- statt wortweise. */
-    const maxLineWidth = 500;
-    const keyLines = [[]];
-    let lineWidth = 0;
-    keyOrders.forEach((o, i)=>{
-      const tour = tours.find(t=>t.id===o.assignedTourId);
-      const col = tour ? hexToRgb01(tour.color) : { r:0, g:0, b:0 };
-      const text = o.auftragNr + (i<keyOrders.length-1 ? ', ' : '');
-      const w = fontReg.widthOfTextAtSize(text, 7.5);
-      if(lineWidth>0 && lineWidth+w > maxLineWidth){
-        keyLines.push([]);
-        lineWidth = 0;
-      }
-      keyLines[keyLines.length-1].push({ text, color: col });
-      lineWidth += w;
-    });
-    keyLines.forEach(tokens=>{
+    targetPage.drawText('Schlüssel vorhanden:', { x:42.5, y:cursorY, size:8, font:fontBold, color:rgb(0,0,0) });
+    cursorY -= 15;
+    keyOrders.forEach(o=>{
       if(cursorY < 30) return;
-      let x = 56;
-      tokens.forEach(tok=>{
-        targetPage.drawText(tok.text, { x, y:cursorY, size:7.5, font:fontReg, color:rgb(tok.color.r,tok.color.g,tok.color.b) });
-        x += fontReg.widthOfTextAtSize(tok.text, 7.5);
-      });
-      cursorY -= 12;
+      const tour = tours.find(t=>t.id===o.assignedTourId);
+      const col = tour ? hexToRgb01(tour.color) : hexToRgb01('#2BB6B7');
+      drawKeyBadge(targetPage, 46.5, cursorY+4, rgb, col);
+      targetPage.drawText(o.auftragNr, { x:60, y:cursorY+1, size:7.5, font:fontReg, color:rgb(col.r,col.g,col.b) });
+      cursorY -= 13;
     });
   }
 
