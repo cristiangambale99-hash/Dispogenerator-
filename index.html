@@ -2874,8 +2874,14 @@ document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
    angekreuzt hat (o.hasKey). Rein aus Grundformen (Kreis/Rechteck) statt
    SVG-Pfad aufgebaut, damit es bei pdf-lib in der winzigen Druckgrösse
    garantiert sauber und seitenrichtig rendert. */
-function drawKeyBadge(page, cx, cy, rgbFn){
-  const col = hexToRgb01('#2BB6B7');
+function drawKeyBadge(page, cx, cy, rgbFn, badgeCol){
+  /* Badge übernimmt die Farbe der zugeteilten Tour statt fix Türkis, damit
+     auf einen Blick erkennbar ist, welcher Tour ein Schlüssel-Auftrag
+     gehört (sonst sieht ein Türkis-Badge neben einem andersfarbigen
+     Tour-Quadrat verwirrend nach einer eigenen, separaten Markierung aus).
+     Ohne zugeteilte Tour (z. B. "nicht zugeteilt") fällt es auf Türkis
+     als neutrale Markenfarbe zurück. */
+  const col = badgeCol || hexToRgb01('#2BB6B7');
   const white = rgbFn(1,1,1);
   const brand = rgbFn(col.r, col.g, col.b);
   page.drawEllipse({ x:cx, y:cy, xScale:4.6, yScale:4.6, color: brand });
@@ -2928,7 +2934,7 @@ async function generateFilledPdf(){
 
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
-    if(o.hasKey) drawKeyBadge(page, X_ADDRESS-9, row.y+3, rgb);
+    if(o.hasKey) drawKeyBadge(page, X_ADDRESS-9, row.y+3, rgb, col);
     pendingTexts.push(()=>{
       page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
       page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
@@ -2967,7 +2973,7 @@ async function generateFilledPdf(){
     const end = start + dur;
     targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
     targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
-    if(o.hasKey) drawKeyBadge(targetPage, X_ADDRESS-9, cursorY+3, rgb);
+    if(o.hasKey) drawKeyBadge(targetPage, X_ADDRESS-9, cursorY+3, rgb, col);
     targetPage.drawText(o.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
@@ -3030,24 +3036,35 @@ async function generateFilledPdf(){
     drawKeyBadge(targetPage, 46.5, cursorY+4, rgb);
     targetPage.drawText('Schlüssel vorhanden:', { x:60, y:cursorY+1, size:8, font:fontBold, color:rgb(0,0,0) });
     cursorY -= 14;
-    const keyNrText = keyOrders.map(o=>o.auftragNr).join(', ');
+    /* Jede Auftragsnummer in der Farbe ihrer eigenen Tour (wie der Badge in
+       der Zeile oben) statt einheitlich Schwarz - so ist auch hier auf
+       einen Blick erkennbar, welcher Tour ein Schlüssel-Auftrag gehört,
+       ohne dass man in der Liste weiter oben nachschauen muss. Dafür wird
+       jede Nummer einzeln gezeichnet (mit eigener Farbe) statt als ein
+       durchgehender String - der Zeilenumbruch misst die Breite deshalb
+       token- statt wortweise. */
     const maxLineWidth = 500;
-    const words = keyNrText.split(', ');
-    const keyLines = [];
-    let line = '';
-    words.forEach(w=>{
-      const candidate = line ? `${line}, ${w}` : w;
-      if(line && fontReg.widthOfTextAtSize(candidate, 7.5) > maxLineWidth){
-        keyLines.push(line);
-        line = w;
-      } else {
-        line = candidate;
+    const keyLines = [[]];
+    let lineWidth = 0;
+    keyOrders.forEach((o, i)=>{
+      const tour = tours.find(t=>t.id===o.assignedTourId);
+      const col = tour ? hexToRgb01(tour.color) : { r:0, g:0, b:0 };
+      const text = o.auftragNr + (i<keyOrders.length-1 ? ', ' : '');
+      const w = fontReg.widthOfTextAtSize(text, 7.5);
+      if(lineWidth>0 && lineWidth+w > maxLineWidth){
+        keyLines.push([]);
+        lineWidth = 0;
       }
+      keyLines[keyLines.length-1].push({ text, color: col });
+      lineWidth += w;
     });
-    if(line) keyLines.push(line);
-    keyLines.forEach(l=>{
+    keyLines.forEach(tokens=>{
       if(cursorY < 30) return;
-      targetPage.drawText(l, { x:56, y:cursorY, size:7.5, font:fontReg, color:rgb(0,0,0) });
+      let x = 56;
+      tokens.forEach(tok=>{
+        targetPage.drawText(tok.text, { x, y:cursorY, size:7.5, font:fontReg, color:rgb(tok.color.r,tok.color.g,tok.color.b) });
+        x += fontReg.widthOfTextAtSize(tok.text, 7.5);
+      });
       cursorY -= 12;
     });
   }
