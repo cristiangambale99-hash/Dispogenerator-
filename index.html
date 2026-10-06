@@ -1074,7 +1074,7 @@ td .name{font-weight:600}
             </div>
             <div class="cs-switch-row" style="border-top:1px solid var(--cs-line)">
               <div>
-                <div style="font-size:13.5px;font-weight:600">Schlüssellieferung & Einführung PFS ausschliessen</div>
+                <div style="font-size:13.5px;font-weight:600">Schlüssel-/Materiallieferung & Einführung PFS ausschliessen</div>
                 <div class="muted" style="font-size:12px;margin-top:2px">Diese Auftragsarten erhalten keine Zeitmitteilung</div>
               </div>
               <label class="cs-switch"><input type="checkbox" id="excludeTypesToggle"><span class="trk"></span></label>
@@ -2570,7 +2570,7 @@ function renderPdfView(){
     const parts = [];
     if(pending.length>0) parts.push(`${pending.length} Zeitmitteilung${pending.length>1?'en':''} bereit zum Versand`);
     if(noEmail.length>0) parts.push(`${noEmail.length} ohne hinterlegte E-Mail (im Rapport keine gefunden)`);
-    if(excludedByType.length>0) parts.push(`${excludedByType.length} ohne Zeitmitteilung (Schlüssellieferung/Einführung)`);
+    if(excludedByType.length>0) parts.push(`${excludedByType.length} ohne Zeitmitteilung (Schlüssel-/Materiallieferung/Einführung)`);
     statusEl.textContent = parts.join(' · ') + '.';
   }
 }
@@ -2682,7 +2682,7 @@ function ccPfsEnabled(){
   });
 })();
 
-/* Admin-Einstellung: Schlüssellieferungen und Einführungen PFS bekommen keine
+/* Admin-Einstellung: Schlüssellieferungen, Materiallieferungen und Einführungen PFS bekommen keine
    Zeitmitteilung (es gibt dabei keinen eigentlichen Reinigungstermin beim
    Kunden mitzuteilen) - lässt sich im Adminbereich ein-/ausschalten, Standard an. */
 const EXCLUDE_TYPES_KEY = 'cs-dispo-exclude-types';
@@ -2690,7 +2690,7 @@ function excludeTypesEnabled(){
   try{ const v = localStorage.getItem(EXCLUDE_TYPES_KEY); return v===null ? true : v==='1'; }catch(e){ return true; }
 }
 function isNotifyExcludedType(o){
-  return /schlüssellieferung|einführung/i.test(o.typ || '');
+  return /schlüssellieferung|material[\s-]*lieferung|einführung/i.test(o.typ || '');
 }
 (function initExcludeTypesToggle(){
   const el = document.getElementById('excludeTypesToggle');
