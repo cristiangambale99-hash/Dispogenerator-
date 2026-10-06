@@ -804,6 +804,8 @@ td .name{font-weight:600}
 .fsec .hint{font-size:13.5px;color:var(--cs-fg-2);margin-bottom:14px}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .field{display:grid;gap:6px;margin-bottom:14px;min-width:0}
+.ao-row{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:640px){ .ao-row{grid-template-columns:1fr} }
 .field label{font-size:13.5px;font-weight:600}
 .field input,.field select,.field textarea{width:100%;min-height:44px;border:1px solid var(--cs-line-strong);background:var(--cs-surface);border-radius:8px;padding:10px 12px;font-size:16px;transition:border-color .15s ease-out}
 .field input:focus,.field select:focus{outline:none;border-color:#1b8384;box-shadow:0 0 0 3px rgba(43,182,183,.18)}
@@ -997,6 +999,7 @@ td .name{font-weight:600}
           <div class="search"><svg><use href="#i-search"/></svg><input type="text" id="searchInput" placeholder="Auftragsnr., Adresse oder Kunde suchen …"></div>
           <button class="chip" id="filterOpen" aria-pressed="false">Nur offene</button>
           <button class="btn btn-s" id="btnOrdersMap"><svg><use href="#i-route"/></svg>Kartenansicht</button>
+          <button class="btn btn-p" id="btnAddOrder" hidden><svg><use href="#i-plus"/></svg>Auftrag hinzufügen</button>
         </div>
         <div class="card">
           <div class="tablewrap">
@@ -1118,6 +1121,39 @@ td .name{font-weight:600}
   <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
     <button class="btn btn-p" id="notifySendBtn">Jetzt senden</button>
     <button class="btn btn-s" id="notifyCancelBtn">Abbrechen</button>
+  </div>
+</div>
+
+<div class="scrim" id="addOrderScrim"></div>
+<div class="mapmodal" id="addOrderModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="addOrderTitle" style="height:auto;max-height:92vh;width:min(560px,94vw)">
+  <div class="mapmodal-h">
+    <div><div class="eyebrow">Manuell ergänzen</div><h2 id="addOrderTitle">Auftrag hinzufügen</h2></div>
+    <button class="icon-btn" id="addOrderClose" aria-label="Schliessen"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <form id="addOrderForm" novalidate style="padding:18px 20px 6px;overflow-y:auto;flex:1 1 auto">
+    <div class="field"><label for="aoNr">Auftragsnr.</label><input type="text" id="aoNr" inputmode="numeric" autocomplete="off" placeholder="z. B. 2601234"></div>
+    <div class="field"><label for="aoName">Kunde <span class="muted" style="font-weight:400">(optional)</span></label><input type="text" id="aoName" autocomplete="off" placeholder="Vorname Nachname"></div>
+    <div class="ao-row">
+      <div class="field"><label for="aoStreet">Strasse</label><input type="text" id="aoStreet" autocomplete="off" placeholder="z. B. Industriestrasse 5"></div>
+      <div class="field"><label for="aoPlz">PLZ Ort</label><input type="text" id="aoPlz" autocomplete="off" placeholder="z. B. 8307 Effretikon"></div>
+    </div>
+    <div class="ao-row">
+      <div class="field"><label for="aoTyp">Auftragsart</label>
+        <input type="text" id="aoTyp" list="aoTypList" autocomplete="off" placeholder="z. B. Monatliche Reinigung">
+        <datalist id="aoTypList"><option value="Monatliche Reinigung"><option value="Ferienvertretung"><option value="Ersatzreinigung"><option value="Neubesetzung Kunde"><option value="Einführung PFS"><option value="Schlüssellieferung"><option value="Materiallieferung"></datalist>
+      </div>
+      <div class="field"><label for="aoStd">Stunden <span class="muted" style="font-weight:400" id="aoStdHint"></span></label><input type="text" id="aoStd" inputmode="decimal" autocomplete="off" placeholder="z. B. 2,5"></div>
+    </div>
+    <div class="field"><label for="aoMail">E-Mail für Zeitmitteilung <span class="muted" style="font-weight:400">(optional)</span></label><input type="email" id="aoMail" autocomplete="off" placeholder="kunde@beispiel.ch"></div>
+    <div class="cs-switch-row" style="margin-bottom:6px">
+      <div><div style="font-size:14px;font-weight:600">Schlüssel vorhanden</div><div class="muted" style="font-size:12.5px">Erscheint als Schlüssel-Symbol in der Dispo-PDF</div></div>
+      <label class="cs-switch"><input type="checkbox" id="aoKey"><span class="trk"></span></label>
+    </div>
+    <div class="warnbox" id="addOrderError" hidden style="margin-top:12px"></div>
+  </form>
+  <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
+    <button class="btn btn-p" id="addOrderSave" type="button">Hinzufügen</button>
+    <button class="btn btn-s" id="addOrderCancel" type="button">Abbrechen</button>
   </div>
 </div>
 
@@ -1913,7 +1949,7 @@ function mapPopupHtml(o){
   const tourOptions = tours.map(t=>`<option value="${t.id}" ${o.assignedTourId===t.id?'selected':''}>${t.name}</option>`).join('');
   return `
     <div class="map-pop" data-nr="${o.auftragNr}" style="min-width:230px;max-width:260px">
-      <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">${o.auftragNr}${o.extra?' <span class="muted" style="font-weight:400;font-size:11.5px">(neu erkannt)</span>':''}</div>
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:6px">${o.auftragNr}${o.manual?' <span class="muted" style="font-weight:400;font-size:11.5px">(manuell)</span>':(o.extra?' <span class="muted" style="font-weight:400;font-size:11.5px">(neu erkannt)</span>':'')}</div>
       <dl style="display:grid;grid-template-columns:72px 1fr;gap:4px 8px;font-size:12px;margin:0 0 8px">
         <dt class="muted">Adresse</dt><dd style="margin:0;font-weight:500">${o.address}${o.kanton ? ' <span class="muted" style="font-weight:400">('+o.kanton+')</span>' : ''}</dd>
         <dt class="muted">Kunde</dt><dd style="margin:0;font-weight:500">${o.customerName || '–'}</dd>
@@ -2290,6 +2326,8 @@ function renderOrdersList(){
   const emptyEl = document.getElementById('ordersEmpty');
   const list = filteredOrders();
   tbody.innerHTML=''; mlist.innerHTML='';
+  const addBtn = document.getElementById('btnAddOrder');
+  if(addBtn) addBtn.hidden = orders.length===0;
 
   if(orders.length===0){
     emptyEl.hidden = false;
@@ -2349,7 +2387,7 @@ function openOrderPanel(auftragNr){
   selectedAuftragNr = auftragNr;
   const o = orders.find(x=>x.auftragNr===auftragNr);
   if(!o) return;
-  document.getElementById('panelEyebrow').textContent = o.extra ? 'Neu erkannt (nicht in Disponentenliste)' : 'Auftrag';
+  document.getElementById('panelEyebrow').textContent = o.manual ? 'Manuell hinzugefügt' : (o.extra ? 'Neu erkannt (nicht in Disponentenliste)' : 'Auftrag');
   document.getElementById('panelTitle').textContent = o.auftragNr;
 
   const suggestion = suggestedEmployee(o, tours);
@@ -2964,6 +3002,17 @@ async function generateFilledPdf(){
   let cursorY = rowsOnLastPage.length ? Math.min(...rowsOnLastPage.map(r=>r.y)) - 26 : 700;
   const targetPage = pages[lastPageIdx] || pages[0];
 
+  /* Die ORIGINAL-Dispositionsliste druckt am Seitenende bereits ihre eigene
+     "Legende Routen:" (Aduna-Export, inkl. km-Angaben). Unsere eigenen, live
+     berechneten Ergänzungen (zusätzliche Zeilen, Legenden für Touren/
+     Schlüssel/Ferien) landen je nach Zeilenanzahl genau auf dieser Höhe und
+     würden sich sonst ungelesen mit dem Original überlagern - darum den
+     ganzen Bereich UNTERHALB der letzten Original-Zeile zuerst mit Weiss
+     überdecken und erst DANACH sauber neu beschreiben. Wichtig: das passiert
+     vor dem Zeichnen der ergänzten Zeilen, sonst würde das Weiss die zuletzt
+     gezeichnete Zeile gleich wieder überdecken. */
+  targetPage.drawRectangle({ x:40, y:15, width:515, height:Math.max(cursorY+14-15, 0), color:rgb(1,1,1) });
+
   const extraAssigned = assigned.filter(o=>!usedRowKeys.has(o.auftragNr));
   for(const o of extraAssigned){
     const tour = tours.find(t=>t.id===o.assignedTourId);
@@ -2981,7 +3030,7 @@ async function generateFilledPdf(){
     targetPage.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
       { x:X_LEFT, y:cursorY-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
-    targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
+    targetPage.drawText(o.manual ? 'Manuell ergänzt (nicht in Disponentenliste)' : 'Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
   }
 
@@ -3000,17 +3049,9 @@ async function generateFilledPdf(){
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText('NICHT ZUGETEILT', { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(0.7,0.1,0.1) });
     targetPage.drawText(`${o.aufwand!=null ? o.aufwand+' Std.' : '? Std.'}`, { x:X_LEFT, y:cursorY-9, size:6.5, font:fontReg, color:rgb(0.7,0.1,0.1) });
-    targetPage.drawText('Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
+    targetPage.drawText(o.manual ? 'Manuell ergänzt (nicht in Disponentenliste)' : 'Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
   }
-
-  /* Die ORIGINAL-Dispositionsliste druckt am Seitenende bereits ihre eigene
-     "Legende Routen:" (Aduna-Export, inkl. km-Angaben). Unsere eigene, live
-     berechnete Legende (Touren/Schlüssel/Ferien) kann je nach Zeilenanzahl
-     genau auf dieser Höhe landen und sich sonst ungelesen mit dem Original
-     überlagern - darum den ganzen Fusszeilen-Bereich zuerst mit Weiss
-     überdecken, bevor sauber und übersichtlich neu darüber geschrieben wird. */
-  targetPage.drawRectangle({ x:40, y:15, width:515, height:Math.max(cursorY+34-15, 0), color:rgb(1,1,1) });
 
   cursorY -= 14;
   targetPage.drawText('Legende Touren:', { x:42.5, y:cursorY, size:8, font:fontBold, color:rgb(0,0,0) });
@@ -3079,6 +3120,82 @@ async function generateFilledPdf(){
 /* =====================================================================
    GESAMT-RENDER
 ===================================================================== */
+
+/* =====================================================================
+   AUFTRAG MANUELL HINZUFÜGEN
+   Nach dem Einlesen kann Loris weitere Aufträge im gleichen Format wie die
+   eingelesenen erfassen (Nr., Kunde/Adresse, Art, Std., E-Mail, Schlüssel).
+   Sie laufen danach wie jeder andere Auftrag durch Zuteilung, Zeitmitteilung
+   und PDF (dort als "Manuell ergänzt" gekennzeichnet).
+===================================================================== */
+function openAddOrderModal(){
+  if(orders.length===0 && !targetDatum){ toast('Bitte zuerst Aufträge einlesen', 'error'); return; }
+  document.getElementById('addOrderForm').reset();
+  document.getElementById('addOrderError').hidden = true;
+  updateAddOrderStdHint();
+  document.getElementById('addOrderModal').classList.add('open');
+  document.getElementById('addOrderModal').setAttribute('aria-hidden','false');
+  document.getElementById('addOrderScrim').classList.add('open');
+  setTimeout(()=> document.getElementById('aoNr').focus(), 60);
+}
+function closeAddOrderModal(){
+  document.getElementById('addOrderModal').classList.remove('open');
+  document.getElementById('addOrderModal').setAttribute('aria-hidden','true');
+  document.getElementById('addOrderScrim').classList.remove('open');
+}
+function updateAddOrderStdHint(){
+  const isIntro = /einführung/i.test(document.getElementById('aoTyp').value);
+  document.getElementById('aoStdHint').textContent = isIntro ? '(Einführung = fix 30 Min.)' : '';
+  document.getElementById('aoStd').disabled = isIntro;
+  if(isIntro) document.getElementById('aoStd').value = '0,5';
+}
+function submitAddOrder(){
+  const errEl = document.getElementById('addOrderError');
+  const val = id => document.getElementById(id).value.trim();
+  const nr = val('aoNr').replace(/\s+/g,'');
+  const name = val('aoName');
+  const street = val('aoStreet');
+  const plzOrt = val('aoPlz');
+  const typ = val('aoTyp');
+  const mail = val('aoMail');
+  const isIntro = /einführung/i.test(typ);
+  const std = parseFloat(val('aoStd').replace(',', '.'));
+  const fail = msg => { errEl.textContent = msg; errEl.hidden = false; };
+
+  if(!nr) return fail('Bitte die Auftragsnummer eingeben.');
+  if(orders.some(o=>o.auftragNr===nr) || absenceOrders.some(o=>o.auftragNr===nr)) return fail(`Auftrag ${nr} ist bereits in der Dispo vorhanden.`);
+  if(!street) return fail('Bitte die Strasse eingeben.');
+  if(!/^\d{4}\s+\S/.test(plzOrt)) return fail('Bitte PLZ und Ort eingeben, z. B. «8307 Effretikon».');
+  if(!typ) return fail('Bitte die Auftragsart eingeben.');
+  if(!isIntro && (!(std>0) || std>24)) return fail('Bitte die Stunden als Zahl eingeben, z. B. 2,5.');
+  if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return fail('Die E-Mail-Adresse scheint ungültig zu sein.');
+
+  const rapport = {
+    auftragNr: nr, customerName: name || null, customerEmail: mail || null,
+    street, plzOrt, bezeichnung: typ, notes: '', zeit: null, aktiv: null,
+    aufwand: isIntro ? 0.5 : std, dateStdPairs: [], introAppointment: null
+  };
+  const o = buildOrder({ auftragNr:nr, addressStreet:street, addressPlzOrt:plzOrt, typ, rapport, extra:false, targetDatum, preAssigned:null });
+  o.manual = true;
+  o.hasKey = document.getElementById('aoKey').checked;
+  if(o.isAbsence){ absenceOrders.push(o); } else { orders.push(o); }
+
+  closeAddOrderModal();
+  toast(`Auftrag ${nr} hinzugefügt`, 'check');
+  renderAll();
+  saveDayState(true);
+  if(!o.isAbsence) openOrderPanel(nr);
+}
+document.getElementById('btnAddOrder').addEventListener('click', openAddOrderModal);
+document.getElementById('addOrderClose').addEventListener('click', closeAddOrderModal);
+document.getElementById('addOrderCancel').addEventListener('click', closeAddOrderModal);
+document.getElementById('addOrderScrim').addEventListener('click', closeAddOrderModal);
+document.getElementById('addOrderSave').addEventListener('click', submitAddOrder);
+document.getElementById('aoTyp').addEventListener('input', updateAddOrderStdHint);
+document.getElementById('addOrderForm').addEventListener('input', ()=>{ document.getElementById('addOrderError').hidden = true; });
+document.getElementById('addOrderForm').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); submitAddOrder(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.getElementById('addOrderModal').classList.contains('open')) closeAddOrderModal(); });
+
 function renderAll(){
   renderDashboard();
   renderOrdersList();
