@@ -1803,6 +1803,8 @@ function dayKey(datum){ return DAY_PREFIX + datum; }
    zu klein. So bleiben die Rapporte nach Neuladen oder beim Öffnen einer gespeicherten
    Tagesdispo verfügbar, und der Download "Auftragsrapporte" je Tour funktioniert weiter. */
 const RAPP_DB = 'cs-dispo-rapporte';
+let rappDatum = null;   // Tag, zu dem rappFiles/rapportSrc gehören
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 function rappDb(){
   return new Promise((res,rej)=>{
     try{
@@ -1815,6 +1817,7 @@ function rappDb(){
 }
 async function saveRapporteStore(datum){
   if(!datum || !rappFiles.length) return;
+  rappDatum = datum;
   try{
     const db = await rappDb();
     await new Promise((res,rej)=>{
@@ -1826,7 +1829,8 @@ async function saveRapporteStore(datum){
   }catch(e){ console.warn('Rapporte konnten nicht gespeichert werden', e); }
 }
 async function loadRapporteStore(datum){
-  rappFiles = []; rapportSrc = {};
+  if(rappDatum===datum && rappFiles.length && Object.keys(rapportSrc).length) return true;
+  rappFiles = []; rapportSrc = {}; rappDatum = null;
   try{
     const db = await rappDb();
     const val = await new Promise((res,rej)=>{
@@ -1834,7 +1838,7 @@ async function loadRapporteStore(datum){
       rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>rej(rq.error);
     });
     db.close();
-    if(val && val.files && val.files.length){ rappFiles = val.files; rapportSrc = val.src || {}; }
+    if(val && val.files && val.files.length){ rappFiles = val.files; rapportSrc = val.src || {}; rappDatum = datum; }
   }catch(e){ console.warn('Rapporte konnten nicht geladen werden', e); }
   return rappFiles.length>0;
 }
@@ -1860,6 +1864,7 @@ function saveDayState(silent){
     };
     localStorage.setItem(dayKey(targetDatum), JSON.stringify(data));
     dayDirty = false;
+    if(rappFiles.length && rappDatum!==targetDatum) saveRapporteStore(targetDatum);
     if(!silent) toast('Tagesdispo gespeichert', 'check');
     renderSavedDays();
     return true;
@@ -2236,6 +2241,7 @@ wireDropzone('dzList','inList', async (files)=>{
   renderUploads();
 }, false);
 wireDropzone('dzRapp','inRapp', async (files)=>{
+  if(rappDatum){ rappFiles = []; rapportSrc = {}; rappDatum = null; }   // Rapporte eines geladenen Tages nicht mit neuen mischen
   for(const f of files){ rappFiles.push({ name:f.name, buf: await fileToArrayBuffer(f) }); }
   renderUploads();
 }, true);
@@ -2811,7 +2817,7 @@ async function ensureRapporte(){
     saveRapporteStore(targetDatum);
   }
   if(rappFiles.length && !needSrc()) return true;
-  toast('Bitte die Arbeitsrapporte dieses Tages auswählen', 'warning');
+  toast('Einmalig: bitte die Arbeitsrapporte dieses Tages auswählen – danach bleiben sie gespeichert', 'warning');
   const files = await askForRapportFiles();
   if(!files.length) return false;
   rappFiles = []; rapportSrc = {};
