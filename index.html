@@ -1355,7 +1355,11 @@ async function parseDispoListPdf(buf){
   return { targetDatum: targetDatumLocal, rows };
 }
 
-async function parseRapportPdf(buf){
+/* Merkt sich je Auftrag, auf welchen Seiten welcher hochgeladenen Rapport-Datei er steht
+   und wo die Linie "______" in der Disposition-Zeile liegt (dort kommt der Tourname hin).
+   Nur im Arbeitsspeicher: nach einem Neuladen der Seite müssen die Rapporte neu eingelesen werden. */
+let rapportSrc = {};
+async function parseRapportPdf(buf, fileIdx){
   const doc = await loadPdf(buf);
   const orders = [];
   for(let p=1;p<=doc.numPages;p++){
@@ -1369,6 +1373,18 @@ async function parseRapportPdf(buf){
 
     const titleMatch = leftText.match(/^(.*?)\s*-\s*Auftrag\s*-\s*Nr\.\s*(\d+)/m);
     if(!titleMatch) continue;
+    {
+      const nrKey = titleMatch[2];
+      const src = (rapportSrc[nrKey] ||= { fileIdx, pages: [], lines: [] });
+      if(src.fileIdx===fileIdx && !src.pages.includes(p)) src.pages.push(p);
+      content.items.forEach(it=>{
+        if(!/_{5,}/.test(it.str)) return;
+        const y = it.transform[5];
+        const dateItem = content.items.find(d=> Math.abs(d.transform[5]-y)<3 && /\d{2}\.\d{2}\.\d{4}/.test(d.str));
+        const dm = dateItem ? dateItem.str.match(/\d{2}\.\d{2}\.\d{4}/) : null;
+        src.lines.push({ page:p, x:it.transform[4], y, w:it.width, datum: dm ? dm[0] : null });
+      });
+    }
 
     const dateStdMatches = [...leftText.matchAll(/(\d{2}\.\d{2}\.\d{4})\s+([\d.,]+)\s*Std\./g)];
     if(dateStdMatches.length===0) continue;
@@ -2177,7 +2193,8 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     parsedListRows = listResult.rows;
     targetDatum = listResult.targetDatum;
 
-    const rapportOrdersArrays = await Promise.all(rappFiles.map(f=> parseRapportPdf(f.buf.slice(0))));
+    rapportSrc = {};
+    const rapportOrdersArrays = await Promise.all(rappFiles.map((f,i)=> parseRapportPdf(f.buf.slice(0), i)));
     const allRapportOrders = rapportOrdersArrays.flat();
 
     const merged = mergeOrders(parsedListRows, allRapportOrders, targetDatum);
@@ -2498,6 +2515,61 @@ document.getElementById('btnAddTour').addEventListener('click', ()=>{
 });
 document.getElementById('newTourName').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnAddTour').click(); } });
 
+
+/* =====================================================================
+   AUFTRAGSRAPPORTE JE TOUR
+   Je Tour eine PDF mit genau den Rapporten dieser Tour (Originalseiten, unverändert),
+   in Tagesreihenfolge. Einzige Ergänzung: der Tourname steht auf der Linie "______"
+   in der Disposition-Zeile. Dateiname: "Auftragsrapporte <Datum> <Tourname>.pdf".
+===================================================================== */
+function safeFileName(s){ return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim(); }
+function winAnsiText(s){ return String(s).replace(/[^ -~ -ÿ]/g,'?'); }
+async function buildTourRapportePdf(tour){
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+  const out = await PDFDocument.create();
+  const font = await out.embedFont(StandardFonts.HelveticaBold);
+  const srcDocs = {};
+  const missing = [];
+  let count = 0;
+  for(const o of items){
+    const src = rapportSrc[o.auftragNr];
+    if(!src || !rappFiles[src.fileIdx] || !src.pages.length){ missing.push(o.auftragNr); continue; }
+    if(!srcDocs[src.fileIdx]) srcDocs[src.fileIdx] = await PDFDocument.load(rappFiles[src.fileIdx].buf.slice(0));
+    const copied = await out.copyPages(srcDocs[src.fileIdx], src.pages.slice().sort((a,b)=>a-b).map(n=>n-1));
+    const pageByNr = {};
+    copied.forEach((pg,i)=>{ out.addPage(pg); pageByNr[src.pages.slice().sort((a,b)=>a-b)[i]] = pg; });
+    const line = src.lines.find(l=>l.datum===targetDatum) || src.lines[0];
+    if(line && pageByNr[line.page]){
+      const name = winAnsiText(tour.name);
+      let size = 10.5;
+      const maxW = Math.max(line.w - 8, 40);
+      while(size>6 && font.widthOfTextAtSize(name,size) > maxW) size -= 0.5;
+      pageByNr[line.page].drawText(name, { x: line.x + 4, y: line.y + 1.8, size, font, color: rgb(0.1,0.1,0.1) });
+    }
+    count++;
+  }
+  return { bytes: await out.save(), count, missing };
+}
+async function downloadTourRapporte(tourId, btn){
+  const tour = tours.find(t=>t.id===tourId);
+  if(!tour) return;
+  if(!rappFiles.length){ toast('Rapporte sind nicht mehr geladen – bitte die Arbeitsrapporte neu einlesen', 'warning'); return; }
+  const label = btn ? btn.innerHTML : null;
+  if(btn){ btn.disabled = true; }
+  try{
+    const { bytes, count, missing } = await buildTourRapportePdf(tour);
+    if(!count){ toast('Für diese Tour wurde kein Rapport gefunden', 'warning'); return; }
+    downloadBytes(bytes, `${safeFileName('Auftragsrapporte ' + (targetDatum||'') + ' ' + tour.name)}.pdf`);
+    toast(missing.length ? `${count} Rapporte geladen · ohne Rapport: ${missing.join(', ')}` : `${count} Rapporte für ${tour.name} geladen`, missing.length?'warning':'check');
+  }catch(err){
+    console.error(err);
+    toast('Rapport-PDF konnte nicht erstellt werden', 'error');
+  }finally{
+    if(btn){ btn.disabled = false; }
+  }
+}
+
 function renderTouren(){
   const wrap = document.getElementById('toursWrap');
   const emptyEl = document.getElementById('toursEmpty');
@@ -2524,6 +2596,7 @@ function renderTouren(){
           <span class="badge ${over8h?'b-warn':'b-neutral'}">${fmtHoursShort(totalMin)}${over8h?' · über 8 Std.':''}</span>
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-map="${t.id}"><svg><use href="#i-route"/></svg>Karte anzeigen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-route="${t.id}"><svg><use href="#i-route"/></svg>Route öffnen</button>` : ''}
+          ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-rapp="${t.id}"><svg><use href="#i-pdf"/></svg>Auftragsrapporte</button>` : ''}
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
       </div>
@@ -2565,6 +2638,7 @@ function renderTouren(){
     if(o){ o.assignedTourId=null; o.assignedTime=null; renderAll(); toast('Zuteilung entfernt','check'); }
   }));
   wrap.querySelectorAll('[data-map]').forEach(btn=> btn.addEventListener('click', ()=> openTourMap(btn.dataset.map)));
+  wrap.querySelectorAll('[data-rapp]').forEach(btn=> btn.addEventListener('click', ()=> downloadTourRapporte(btn.dataset.rapp, btn)));
   wrap.querySelectorAll('[data-route]').forEach(btn=> btn.addEventListener('click', ()=>{
     const t = tours.find(x=>x.id===btn.dataset.route);
     if(!t) return;
