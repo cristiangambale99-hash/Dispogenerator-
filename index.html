@@ -778,6 +778,9 @@ td .name{font-weight:600}
 .key-toggle svg{width:17px;height:17px}
 .key-toggle:hover{border-color:var(--cs-brand)}
 .key-toggle-on{background:var(--cs-brand);border-color:var(--cs-brand);color:#fff}
+.uh-toggle{margin-left:5px;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.04em;width:auto;min-width:32px;padding:0 7px}
+.uh-toggle.uh-on{background:#3c3c3b;border-color:#3c3c3b;color:#fff}
+.uh-toggle.uh-on:hover{border-color:#3c3c3b}
 .cs-switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0}
 .cs-switch{position:relative;display:inline-block;width:40px;height:23px;flex:0 0 auto}
 .cs-switch input{opacity:0;width:0;height:0}
@@ -2303,6 +2306,24 @@ function keyToggleEl(o){
   return btn;
 }
 
+/* UH-Toggle: Auftrag der Unterhaltsreinigung (UH). Aktiv = der Kunde bekommt keine
+   Zeitmitteilung, und in der Dispo-PDF steht bei der Tour die Anmerkung "UH". */
+function uhToggleEl(o){
+  const btn = document.createElement('button');
+  btn.className = 'key-toggle uh-toggle' + (o.isUH ? ' uh-on' : '');
+  btn.setAttribute('aria-pressed', o.isUH ? 'true' : 'false');
+  btn.setAttribute('aria-label', o.isUH ? 'UH-Auftrag – zum Entfernen klicken' : 'Als UH-Auftrag markieren');
+  btn.title = o.isUH ? 'UH-Auftrag: keine Zeitmitteilung, Anmerkung «UH» in der Dispo' : 'Als UH-Auftrag markieren';
+  btn.textContent = 'UH';
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    o.isUH = !o.isUH;
+    renderAll();
+    saveDayState(true);
+  });
+  return btn;
+}
+
 /* Löschen: Loris soll fälschlich eingelesene oder nicht mehr benötigte
    Aufträge direkt aus der Liste entfernen können - mit Sicherheitsabfrage,
    damit nichts aus Versehen verschwindet. */
@@ -2372,6 +2393,7 @@ function renderOrdersList(){
     tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td>${statusBadge(o)}</td><td style="text-align:center"></td>`;
     tr.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
     tr.children[3].appendChild(keyToggleEl(o));
+    tr.children[3].appendChild(uhToggleEl(o));
     tr.children[5].appendChild(deleteOrderBtnEl(o));
     tbody.appendChild(tr);
 
@@ -2379,6 +2401,7 @@ function renderOrdersList(){
     row.className='mrow';
     row.innerHTML = `<div class="tx"><b>${o.auftragNr} · ${o.customerName || o.address.split(',')[0]}</b><small>${o.address}</small></div>`;
     row.appendChild(keyToggleEl(o));
+    row.appendChild(uhToggleEl(o));
     const statusWrap = document.createElement('span');
     statusWrap.innerHTML = statusBadge(o);
     row.appendChild(statusWrap.firstElementChild);
@@ -2426,6 +2449,7 @@ function openOrderPanel(auftragNr){
       <dt>Aufwand</dt><dd>${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</dd>
       <dt>Notizen</dt><dd>${o.notes || '–'}</dd>
       <dt>Schlüssel</dt><dd><button class="chip" id="panelKeyToggle" aria-pressed="${o.hasKey?'true':'false'}">${o.hasKey ? '✓ Vorhanden' : 'Nicht vorhanden'}</button></dd>
+      <dt>UH-Auftrag</dt><dd><button class="chip" id="panelUhToggle" aria-pressed="${o.isUH?'true':'false'}">${o.isUH ? '✓ UH – keine Zeitmitteilung' : 'Nein'}</button></dd>
     </dl>
     ${fixHint}
     <h3 class="sec-t">Zuteilen</h3>
@@ -2473,6 +2497,13 @@ function openOrderPanel(auftragNr){
     document.getElementById('goTourenBtn').addEventListener('click', ()=>{ closePanel(); goView('touren'); });
   }
 
+  document.getElementById('panelUhToggle').addEventListener('click', ()=>{
+    o.isUH = !o.isUH;
+    openOrderPanel(auftragNr);
+    renderOrdersList();
+    renderPdfView();
+    saveDayState(true);
+  });
   document.getElementById('panelKeyToggle').addEventListener('click', ()=>{
     o.hasKey = !o.hasKey;
     openOrderPanel(auftragNr);
@@ -2515,6 +2546,13 @@ document.getElementById('btnAddTour').addEventListener('click', ()=>{
 });
 document.getElementById('newTourName').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnAddTour').click(); } });
 
+
+/* Anmerkung "UH" bei der Tour in der Dispo-PDF: kleines Etikett in Tourfarbe
+   direkt hinter dem Tournamen, damit die Mitarbeitenden den UH-Auftrag erkennen. */
+function drawUhTag(page, x, y, col, font, rgb){
+  page.drawRectangle({ x, y:y-2, width:17, height:10.5, color:rgb(col.r,col.g,col.b) });
+  page.drawText('UH', { x:x+3.2, y:y+0.7, size:7, font, color:rgb(1,1,1) });
+}
 
 /* =====================================================================
    AUFTRAGSRAPPORTE JE TOUR
@@ -2671,9 +2709,9 @@ function renderPdfView(){
 
   const statusEl = document.getElementById('notifyStatus');
   const changedAssigned = assigned.filter(o=> o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime);
-  const excludedByType = excludeTypesEnabled() ? changedAssigned.filter(o=> isNotifyExcludedType(o)) : [];
+  const excludedByType = changedAssigned.filter(o=> o.isUH || (excludeTypesEnabled() && isNotifyExcludedType(o)));
   const pending = pendingNotifications();
-  const noEmail = changedAssigned.filter(o=> !o.customerEmail && !isNotifyExcludedType(o));
+  const noEmail = changedAssigned.filter(o=> !o.customerEmail && !o.isUH && !isNotifyExcludedType(o));
   if(assigned.length===0){
     statusEl.textContent = 'Noch keine Aufträge zugeteilt.';
   } else if(pending.length===0 && noEmail.length===0 && excludedByType.length===0){
@@ -2818,6 +2856,7 @@ function pendingNotifications(){
   return orders.filter(o=>
     o.assignedTourId && o.assignedTime && o.customerEmail &&
     (o.assignedTourId!==o.notifiedTourId || o.assignedTime!==o.notifiedTime) &&
+    !o.isUH &&
     !(excludeTypesEnabled() && isNotifyExcludedType(o))
   );
 }
@@ -3049,7 +3088,9 @@ async function generateFilledPdf(){
     page.drawRectangle({ x:X_SWATCH-4, y:row.y, width:8, height:8, color:rgb(col.r,col.g,col.b) });
     if(o.hasKey) drawKeyBadge(page, X_ADDRESS-9, row.y+3, rgb, col);
     pendingTexts.push(()=>{
-      page.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+      const lbl = `${stopNumber[o.auftragNr]}. ${tour.name}`;
+      page.drawText(lbl, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+      if(o.isUH) drawUhTag(page, X_LEFT + fontBold.widthOfTextAtSize(lbl, 8) + 5, row.y, col, fontBold, rgb);
       page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
         { x:X_LEFT, y:row.y-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
     });
@@ -3101,7 +3142,9 @@ async function generateFilledPdf(){
     targetPage.drawText(o.address, { x:X_ADDRESS, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawText(o.typ || '', { x:X_TYP, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
     targetPage.drawRectangle({ x:X_SWATCH-4, y:cursorY+1, width:8, height:8, color:rgb(col.r,col.g,col.b) });
-    targetPage.drawText(`${stopNumber[o.auftragNr]}. ${tour.name}`, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+    const lblX = `${stopNumber[o.auftragNr]}. ${tour.name}`;
+    targetPage.drawText(lblX, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
+    if(o.isUH) drawUhTag(targetPage, X_LEFT + fontBold.widthOfTextAtSize(lblX, 8) + 5, cursorY, col, fontBold, rgb);
     targetPage.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
       { x:X_LEFT, y:cursorY-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(o.manual ? 'Manuell ergänzt (nicht in Disponentenliste)' : 'Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
