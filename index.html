@@ -1043,6 +1043,7 @@ td .name{font-weight:600}
           <button class="btn btn-p" id="btnAddTour"><svg><use href="#i-plus"/></svg>Hinzufügen</button>
         </div>
 
+        <p class="muted" id="rappStatus" style="font-size:13px;margin:0 0 10px"></p>
         <div id="toursWrap" class="toursec"></div>
         <div class="empty" id="toursEmpty"><div class="ic" id="toursEmptyIcon"></div><p>Noch keine Touren angelegt. Oben eine Tour hinzufügen.</p></div>
       </div>
@@ -1815,21 +1816,34 @@ function rappDb(){
     }catch(e){ rej(e); }
   });
 }
+const RAPP_LS = 'cs-dispo-rapp-';
 async function saveRapporteStore(datum){
-  if(!datum || !rappFiles.length) return;
+  if(!datum || !rappFiles.length) return false;
   rappDatum = datum;
+  let ok = false;
   try{
     const db = await rappDb();
     await new Promise((res,rej)=>{
       const tx = db.transaction('tage','readwrite');
       tx.objectStore('tage').put({ files: rappFiles.map(f=>({name:f.name, buf:f.buf})), src: rapportSrc, savedAt: Date.now() }, datum);
-      tx.oncomplete = res; tx.onerror = ()=>rej(tx.error);
+      tx.oncomplete = res; tx.onerror = ()=>rej(tx.error); tx.onabort = ()=>rej(tx.error);
     });
-    db.close();
-  }catch(e){ console.warn('Rapporte konnten nicht gespeichert werden', e); }
+    db.close(); ok = true;
+  }catch(e){ console.warn('Rapporte: IndexedDB nicht verfügbar', e); }
+  if(!ok){
+    /* Ersatz: localStorage (kleiner, aber meist verfügbar) */
+    try{
+      const payload = { files: rappFiles.map(f=>({name:f.name, base64:arrayBufferToBase64(f.buf)})), src: rapportSrc };
+      localStorage.setItem(RAPP_LS+datum, JSON.stringify(payload));
+      ok = true;
+    }catch(e){ console.warn('Rapporte: localStorage nicht verfügbar', e); }
+  }
+  if(!ok) toast('Rapporte konnten im Browser nicht gespeichert werden – Download nur bis zum Neuladen möglich', 'warning');
+  updateRappStatus();
+  return ok;
 }
 async function loadRapporteStore(datum){
-  if(rappDatum===datum && rappFiles.length && Object.keys(rapportSrc).length) return true;
+  if(rappDatum===datum && rappFiles.length && Object.keys(rapportSrc).length){ updateRappStatus(); return true; }
   rappFiles = []; rapportSrc = {}; rappDatum = null;
   try{
     const db = await rappDb();
@@ -1839,10 +1853,25 @@ async function loadRapporteStore(datum){
     });
     db.close();
     if(val && val.files && val.files.length){ rappFiles = val.files; rapportSrc = val.src || {}; rappDatum = datum; }
-  }catch(e){ console.warn('Rapporte konnten nicht geladen werden', e); }
+  }catch(e){ console.warn('Rapporte: IndexedDB nicht lesbar', e); }
+  if(!rappFiles.length){
+    try{
+      const raw = localStorage.getItem(RAPP_LS+datum);
+      if(raw){ const v = JSON.parse(raw); rappFiles = v.files.map(f=>({name:f.name, buf:base64ToArrayBuffer(f.base64)})); rapportSrc = v.src || {}; rappDatum = datum; }
+    }catch(e){ console.warn('Rapporte: localStorage nicht lesbar', e); }
+  }
+  updateRappStatus();
   return rappFiles.length>0;
 }
+function updateRappStatus(){
+  const el = document.getElementById('rappStatus');
+  if(!el) return;
+  el.textContent = rappFiles.length
+    ? `Auftragsrapporte geladen: ${rappFiles.length} ${rappFiles.length===1?'Datei':'Dateien'}${rappDatum ? ' (' + rappDatum + ')' : ''} – Download je Tour möglich.`
+    : 'Auftragsrapporte nicht geladen – beim ersten Download einmalig die Rapport-PDFs dieses Tages auswählen.';
+}
 async function deleteRapporteStore(datum){
+  try{ localStorage.removeItem(RAPP_LS+datum); }catch(e){}
   try{
     const db = await rappDb();
     await new Promise((res)=>{ const tx = db.transaction('tage','readwrite'); tx.objectStore('tage').delete(datum); tx.oncomplete = res; tx.onerror = res; });
@@ -2845,6 +2874,7 @@ async function downloadTourRapporte(tourId, btn){
 }
 
 function renderTouren(){
+  updateRappStatus();
   const wrap = document.getElementById('toursWrap');
   const emptyEl = document.getElementById('toursEmpty');
   wrap.innerHTML='';
