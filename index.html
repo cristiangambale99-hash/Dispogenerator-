@@ -778,7 +778,7 @@ td .name{font-weight:600}
 .key-toggle svg{width:17px;height:17px}
 .key-toggle:hover{border-color:var(--cs-brand)}
 .key-toggle-on{background:var(--cs-brand);border-color:var(--cs-brand);color:#fff}
-.uh-toggle{margin-left:5px;font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.04em;width:auto;min-width:32px;padding:0 7px}
+.uh-toggle{font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:0}
 .uh-toggle.uh-on{background:#3c3c3b;border-color:#3c3c3b;color:#fff}
 .uh-toggle.uh-on:hover{border-color:#3c3c3b}
 .cs-switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0}
@@ -1007,7 +1007,7 @@ td .name{font-weight:600}
         <div class="card">
           <div class="tablewrap">
             <table>
-              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th style="text-align:center">Schlüssel</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Auftragsnr.</th><th>Kunde / Adresse</th><th>Std.</th><th style="text-align:center">Schlüssel</th><th style="text-align:center">UH</th><th>Status</th><th></th></tr></thead>
               <tbody id="ordersTbody"></tbody>
             </table>
           </div>
@@ -1054,7 +1054,10 @@ td .name{font-weight:600}
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
           <div><div class="eyebrow">Putzfrauenservice · <span id="pdfDatum">Dispo</span></div><h1>PDF ERSTELLEN</h1><p class="sub">Prüfen, dann die saubere Disposition als PDF erzeugen.</p></div>
-          <button class="btn btn-p" id="btnGeneratePdf"><svg><use href="#i-pdf"/></svg>PDF erstellen</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-p" id="btnGeneratePdf"><svg><use href="#i-pdf"/></svg>PDF erstellen</button>
+            <button class="btn btn-s" id="btnGeneratePdfOld" title="Bisherige Ansicht auf der Aduna-Disposition">Aduna-Ansicht (alt)</button>
+          </div>
         </div>
       </div>
       <div class="content">
@@ -2381,7 +2384,7 @@ function renderOrdersList(){
     if(o.kanton !== lastKanton){
       lastKanton = o.kanton;
       const trh = document.createElement('tr');
-      trh.innerHTML = `<td colspan="6" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
+      trh.innerHTML = `<td colspan="7" style="background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px;cursor:default">${kantonLabel(o.kanton)}</td>`;
       tbody.appendChild(trh);
       const rowh = document.createElement('div');
       rowh.style.cssText='background:var(--cs-bg-soft);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-fg-2);font-weight:700;padding:8px 16px';
@@ -2390,11 +2393,11 @@ function renderOrdersList(){
     }
     const tr = document.createElement('tr');
     tr.setAttribute('aria-selected', o.auftragNr===selectedAuftragNr ? 'true':'false');
-    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td>${statusBadge(o)}</td><td style="text-align:center"></td>`;
+    tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td style="text-align:center"></td><td>${statusBadge(o)}</td><td style="text-align:center"></td>`;
     tr.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
     tr.children[3].appendChild(keyToggleEl(o));
-    tr.children[3].appendChild(uhToggleEl(o));
-    tr.children[5].appendChild(deleteOrderBtnEl(o));
+    tr.children[4].appendChild(uhToggleEl(o));
+    tr.children[6].appendChild(deleteOrderBtnEl(o));
     tbody.appendChild(tr);
 
     const row = document.createElement('div');
@@ -2547,6 +2550,151 @@ document.getElementById('btnAddTour').addEventListener('click', ()=>{
 document.getElementById('newTourName').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnAddTour').click(); } });
 
 
+
+/* =====================================================================
+   NEUE DISPO-ÜBERSICHT NACH TOUR
+   Eigenständige, saubere PDF (kein Overlay auf der Aduna-Liste): jede Tour ein
+   Block in der Tourfarbe, Aufträge in Tagesreihenfolge. Möglichst eine Seite;
+   reicht der Platz nicht, läuft die Tour auf einer zweiten Seite sauber weiter
+   (Tourkopf wird wiederholt). Legende wie bisher am Schluss.
+===================================================================== */
+async function generateTourDispoPdf(){
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const doc = await PDFDocument.create();
+  const reg = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28, H = 841.89, L = 40, R = W - 40, TOP = H - 56, BOTTOM = 56;
+  const INK = rgb(0.17,0.17,0.17), GREY = rgb(0.46,0.46,0.46), LINE = rgb(0.85,0.85,0.85);
+  const T = s => winAnsiText(s == null ? '' : s);
+  const fit = (txt, font, size, maxW) => {
+    let t = T(txt);
+    if(font.widthOfTextAtSize(t, size) <= maxW) return t;
+    while(t.length>1 && font.widthOfTextAtSize(t + '…', size) > maxW) t = t.slice(0,-1);
+    return t.trimEnd() + '...';
+  };
+  const dateLong = (()=>{
+    const m = (targetDatum||'').match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if(!m) return targetDatum || '';
+    return new Date(+m[3], +m[2]-1, +m[1]).toLocaleDateString('de-CH', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  })();
+
+  const byTour = {};
+  orders.forEach(o=>{ if(o.assignedTourId && o.assignedTime) (byTour[o.assignedTourId] ||= []).push(o); });
+  const activeTours = tours.filter(t=> (byTour[t.id]||[]).length);
+  activeTours.forEach(t=> byTour[t.id].sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime)));
+  const open = orders.filter(o=>!o.assignedTourId);
+  const totalCount = orders.length;
+
+  const pages = [];
+  let page, y;
+  const newPage = (first) => {
+    page = doc.addPage([W,H]); pages.push(page);
+    if(first){
+      page.drawText('Disposition nach Tour', { x:L, y:H-60, size:20, font:bold, color:INK });
+      page.drawText(T(`${dateLong}   ·   ${totalCount} Aufträge   ·   ${activeTours.length} ${activeTours.length===1?'Tour':'Touren'}`), { x:L, y:H-78, size:10.5, font:reg, color:GREY });
+      y = H - 110;
+    } else {
+      page.drawText(T(`Disposition nach Tour · ${targetDatum||''} (Fortsetzung)`), { x:L, y:H-50, size:10, font:bold, color:GREY });
+      y = H - 76;
+    }
+  };
+  const colHeads = () => {
+    y -= 14;
+    [[L+10,'Nr.'],[L+36,'Zeit'],[L+120,'Auftrag'],[L+185,'Adresse'],[L+390,'Bezeichnung']].forEach(([x,t])=> page.drawText(t, { x, y, size:8.5, font:reg, color:GREY }));
+    y -= 6; page.drawLine({ start:{x:L,y}, end:{x:R,y}, thickness:.6, color:LINE });
+  };
+  const band = (label, rightText, col, cont) => {
+    page.drawRectangle({ x:L, y:y-22, width:R-L, height:22, color:rgb(col.r,col.g,col.b) });
+    page.drawText(T(label.toUpperCase() + (cont?'  (Fortsetzung)':'')), { x:L+10, y:y-15, size:12, font:bold, color:rgb(1,1,1) });
+    const tw = reg.widthOfTextAtSize(T(rightText), 10);
+    page.drawText(T(rightText), { x:R-10-tw, y:y-15, size:10, font:reg, color:rgb(1,1,1) });
+    y -= 22; colHeads();
+  };
+  const ROW = 21;
+  const need = (rows) => y - rows*ROW < BOTTOM;
+  newPage(true);
+
+  const drawRow = (o, n, t, col, startTxt) => {
+    y -= ROW;
+    const c = rgb(col.r,col.g,col.b);
+    page.drawText(String(n), { x:L+10, y, size:10.5, font:bold, color:c });
+    page.drawText(T(startTxt), { x:L+36, y, size:10, font:reg, color:c });
+    page.drawText(T(o.auftragNr), { x:L+120, y, size:10, font:reg, color:INK });
+    if(o.hasKey) drawKeyBadge(page, L+168, y+3.5, rgb, col);
+    page.drawText(fit(o.address, reg, 10, 196), { x:L+185, y, size:10, font:reg, color:INK });
+    page.drawText(fit(o.typ || '', reg, 10, 100), { x:L+390, y, size:10, font:reg, color:INK });
+    if(o.isUH) drawUhTag(page, R-22, y, col, bold, rgb);
+    page.drawLine({ start:{x:L,y:y-7}, end:{x:R,y:y-7}, thickness:.5, color:LINE });
+  };
+
+  activeTours.forEach(t=>{
+    const col = hexToRgb01(t.color);
+    const items = byTour[t.id];
+    const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    const right = `${items.length} ${items.length===1?'Auftrag':'Aufträge'}  ·  ${fmtHoursShort(mins)}`;
+    if(need(3)) newPage(false);
+    band(t.name + (t.teamSize>1?' (2 Personen)':''), right, col, false);
+    items.forEach((o,i)=>{
+      if(need(1)){ newPage(false); band(t.name, right, col, true); }
+      const start = timeToMin(o.assignedTime);
+      const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
+      drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`);
+    });
+    y -= 30;
+  });
+
+  if(open.length){
+    const grey = { r:.46, g:.46, b:.46 };
+    if(need(3)) newPage(false);
+    band('Nicht zugeteilt', `${open.length} ${open.length===1?'Auftrag':'Aufträge'}`, grey, false);
+    open.forEach(o=>{
+      if(need(1)){ newPage(false); band('Nicht zugeteilt', `${open.length} Aufträge`, grey, true); }
+      drawRow(o, '–', null, grey, '–');
+    });
+    y -= 30;
+  }
+
+  /* Legende wie bisher: Touren mit Stunden, darunter Schlüssel je Auftrag in Tourfarbe */
+  const keyOrders = [];
+  activeTours.forEach(t=> byTour[t.id].forEach(o=>{ if(o.hasKey) keyOrders.push({o, t}); }));
+  const legendH = 16 + activeTours.length*14 + (keyOrders.length ? 26 + keyOrders.length*14 : 0);
+  if(y - legendH < BOTTOM) newPage(false);
+  page.drawText('Legende Touren:', { x:L, y, size:9.5, font:bold, color:INK });
+  y -= 6;
+  activeTours.forEach(t=>{
+    y -= 14;
+    const col = hexToRgb01(t.color);
+    const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    page.drawRectangle({ x:L, y:y-1, width:9, height:9, color:rgb(col.r,col.g,col.b) });
+    page.drawText(T(`${t.name}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
+  });
+  if(keyOrders.length){
+    y -= 26;
+    page.drawText('Schlüssel vorhanden:', { x:L, y, size:9.5, font:bold, color:INK });
+    keyOrders.forEach(({o,t})=>{
+      y -= 14;
+      const col = hexToRgb01(t.color);
+      drawKeyBadge(page, L+6, y+3.5, rgb, col);
+      page.drawText(T(o.auftragNr), { x:L+20, y, size:9.5, font:reg, color:rgb(col.r,col.g,col.b) });
+    });
+  }
+  if(absenceOrders.length){
+    y -= 26;
+    page.drawText('Abwesenheiten laut Dispo:', { x:L, y, size:9.5, font:bold, color:INK });
+    absenceOrders.forEach(o=>{ y -= 13; page.drawText(fit(o.typ||o.auftragNr, reg, 9, R-L-16), { x:L+2, y, size:9, font:reg, color:GREY }); });
+  }
+
+  pages.forEach((pg,i)=>{
+    const lbl = `Seite ${i+1} von ${pages.length}`;
+    pg.drawText(lbl, { x:R - reg.widthOfTextAtSize(lbl, 8.5), y:30, size:8.5, font:reg, color:GREY });
+    pg.drawText('Clean Service Scaramuzzo AG · Putzfrauenservice', { x:L, y:30, size:8.5, font:reg, color:GREY });
+  });
+
+  const bytes = await doc.save();
+  const dateForFile = (targetDatum||'').replace(/\./g,'-');
+  downloadBytes(bytes, `Disposition_${dateForFile}_nach_Tour.pdf`);
+}
+
 /* Anmerkung "UH" bei der Tour in der Dispo-PDF: kleines Etikett in Tourfarbe
    direkt hinter dem Tournamen, damit die Mitarbeitenden den UH-Auftrag erkennen. */
 function drawUhTag(page, x, y, col, font, rgb){
@@ -2561,7 +2709,7 @@ function drawUhTag(page, x, y, col, font, rgb){
    in der Disposition-Zeile. Dateiname: "Auftragsrapporte <Datum> <Tourname>.pdf".
 ===================================================================== */
 function safeFileName(s){ return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim(); }
-function winAnsiText(s){ return String(s).replace(/[^ -~ -ÿ]/g,'?'); }
+function winAnsiText(s){ return String(s).replace(/[\u2010-\u2012]/g,'-').replace(/[^\u0020-\u007e\u00a0-\u00ff\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2022\u2026\u20ac]/g,'?'); }
 async function buildTourRapportePdf(tour){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
@@ -3008,10 +3156,20 @@ document.getElementById('notifySendBtn').addEventListener('click', ()=>{
   sendBatch();
 });
 
-document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
+document.getElementById('btnGeneratePdfOld').addEventListener('click', async ()=>{
   if(!listFile || orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
   try{
     await generateFilledPdf();
+    toast('PDF (Aduna-Ansicht) erstellt', 'check');
+  }catch(err){
+    console.error(err);
+    toast('Fehler beim PDF erstellen', 'error');
+  }
+});
+document.getElementById('btnGeneratePdf').addEventListener('click', async ()=>{
+  if(orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
+  try{
+    await generateTourDispoPdf();
     toast('PDF erstellt', 'check');
   }catch(err){
     console.error(err);
