@@ -2687,7 +2687,7 @@ async function generateTourDispoPdf(){
   };
   const colHeads = () => {
     y -= 14;
-    [[L+10,'Nr.'],[L+36,'Zeit'],[L+120,'Auftrag'],[L+185,'Adresse'],[L+390,'Bezeichnung']].forEach(([x,t])=> page.drawText(t, { x, y, size:8.5, font:reg, color:GREY }));
+    [[L+10,'Nr.'],[L+36,'Zeit'],[L+108,'Std.'],[L+152,'Auftrag'],[L+212,'Adresse'],[L+388,'Bezeichnung']].forEach(([x,t])=> page.drawText(t, { x, y, size:8.5, font:reg, color:GREY }));
     y -= 6; page.drawLine({ start:{x:L,y}, end:{x:R,y}, thickness:.6, color:LINE });
   };
   const band = (label, rightText, col, cont) => {
@@ -2697,21 +2697,27 @@ async function generateTourDispoPdf(){
     page.drawText(T(rightText), { x:R-10-tw, y:y-15, size:10, font:reg, color:rgb(1,1,1) });
     y -= 22; colHeads();
   };
-  const ROW = 21;
+  const ROW = 24;
   const need = (rows) => y - rows*ROW < BOTTOM;
   newPage(true);
 
-  const drawRow = (o, n, t, col, startTxt) => {
+  const drawRow = (o, n, t, col, startTxt, team) => {
     y -= ROW;
     const c = rgb(col.r,col.g,col.b);
     page.drawText(String(n), { x:L+10, y, size:10.5, font:bold, color:c });
     page.drawText(T(startTxt), { x:L+36, y, size:10, font:reg, color:c });
-    page.drawText(T(o.auftragNr), { x:L+120, y, size:10, font:reg, color:INK });
-    if(o.hasKey) drawKeyBadge(page, L+168, y+3.5, rgb, col);
-    page.drawText(fit(o.address, reg, 10, 196), { x:L+185, y, size:10, font:reg, color:INK });
-    page.drawText(fit(o.typ || '', reg, 10, 100), { x:L+390, y, size:10, font:reg, color:INK });
+    /* Stundenaufwand je Kunde (laut Auftrag); bei 2er-Tour darunter die Zeit je Person */
+    const nominalMin = o.isEinfuehrung ? 30 : (o.aufwand!=null ? Math.round(o.aufwand*60) : null);
+    page.drawText(nominalMin!=null ? T(fmtHoursShort(nominalMin)) : '–', { x:L+108, y, size:10, font:bold, color:INK });
+    if(team>1 && nominalMin!=null && !o.isEinfuehrung){
+      page.drawText(T('je ' + String(Math.round(jobDurationMinutes(o.aufwand, team, false)/60*100)/100).replace('.',',') + ' Std.'), { x:L+108, y:y-8, size:6.5, font:reg, color:GREY });
+    }
+    page.drawText(T(o.auftragNr), { x:L+152, y, size:10, font:reg, color:INK });
+    if(o.hasKey) drawKeyBadge(page, L+200, y+3.5, rgb, col);
+    page.drawText(fit(o.address, reg, 9.5, 170), { x:L+212, y, size:9.5, font:reg, color:INK });
+    page.drawText(fit(o.typ || '', reg, 10, 100), { x:L+388, y, size:10, font:reg, color:INK });
     if(o.isUH) drawUhTag(page, R-22, y, col, bold, rgb);
-    page.drawLine({ start:{x:L,y:y-7}, end:{x:R,y:y-7}, thickness:.5, color:LINE });
+    page.drawLine({ start:{x:L,y:y-10}, end:{x:R,y:y-10}, thickness:.5, color:LINE });
   };
 
   activeTours.forEach(t=>{
@@ -2725,7 +2731,7 @@ async function generateTourDispoPdf(){
       if(need(1)){ newPage(false); band(t.name, right, col, true); }
       const start = timeToMin(o.assignedTime);
       const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
-      drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`);
+      drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`, t.teamSize);
     });
     y -= 30;
   });
@@ -2736,7 +2742,7 @@ async function generateTourDispoPdf(){
     band('Nicht zugeteilt', `${open.length} ${open.length===1?'Auftrag':'Aufträge'}`, grey, false);
     open.forEach(o=>{
       if(need(1)){ newPage(false); band('Nicht zugeteilt', `${open.length} Aufträge`, grey, true); }
-      drawRow(o, '–', null, grey, '–');
+      drawRow(o, '–', null, grey, '–', 1);
     });
     y -= 30;
   }
