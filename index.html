@@ -1799,6 +1799,54 @@ function base64ToArrayBuffer(b64){
 }
 function dayKey(datum){ return DAY_PREFIX + datum; }
 
+/* Rapport-PDFs je Tag dauerhaft im Browser (IndexedDB) ablegen. localStorage ist dafür
+   zu klein. So bleiben die Rapporte nach Neuladen oder beim Öffnen einer gespeicherten
+   Tagesdispo verfügbar, und der Download "Auftragsrapporte" je Tour funktioniert weiter. */
+const RAPP_DB = 'cs-dispo-rapporte';
+function rappDb(){
+  return new Promise((res,rej)=>{
+    try{
+      const rq = indexedDB.open(RAPP_DB, 1);
+      rq.onupgradeneeded = ()=> rq.result.createObjectStore('tage');
+      rq.onsuccess = ()=> res(rq.result);
+      rq.onerror = ()=> rej(rq.error);
+    }catch(e){ rej(e); }
+  });
+}
+async function saveRapporteStore(datum){
+  if(!datum || !rappFiles.length) return;
+  try{
+    const db = await rappDb();
+    await new Promise((res,rej)=>{
+      const tx = db.transaction('tage','readwrite');
+      tx.objectStore('tage').put({ files: rappFiles.map(f=>({name:f.name, buf:f.buf})), src: rapportSrc, savedAt: Date.now() }, datum);
+      tx.oncomplete = res; tx.onerror = ()=>rej(tx.error);
+    });
+    db.close();
+  }catch(e){ console.warn('Rapporte konnten nicht gespeichert werden', e); }
+}
+async function loadRapporteStore(datum){
+  rappFiles = []; rapportSrc = {};
+  try{
+    const db = await rappDb();
+    const val = await new Promise((res,rej)=>{
+      const rq = db.transaction('tage').objectStore('tage').get(datum);
+      rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>rej(rq.error);
+    });
+    db.close();
+    if(val && val.files && val.files.length){ rappFiles = val.files; rapportSrc = val.src || {}; }
+  }catch(e){ console.warn('Rapporte konnten nicht geladen werden', e); }
+  return rappFiles.length>0;
+}
+async function deleteRapporteStore(datum){
+  try{
+    const db = await rappDb();
+    await new Promise((res)=>{ const tx = db.transaction('tage','readwrite'); tx.objectStore('tage').delete(datum); tx.oncomplete = res; tx.onerror = res; });
+    db.close();
+  }catch(e){}
+}
+
+
 function saveDayState(silent){
   if(!targetDatum || !listFile || orders.length===0) return false;
   try{
@@ -1860,11 +1908,14 @@ function loadDayState(datum){
     document.getElementById('dashSub').textContent = 'Aufträge prüfen und den Touren zuteilen, dann PDF erstellen.';
     ['listDatum','tourenDatum','pdfDatum'].forEach(id=> document.getElementById(id).textContent = targetDatum || 'Dispo');
     renderAll();
-    toast('Tagesdispo geladen – Anpassungen möglich', 'check');
+    loadRapporteStore(data.targetDatum).then(ok=>{
+      toast(ok ? 'Tagesdispo geladen – Rapporte wieder verfügbar' : 'Tagesdispo geladen – Anpassungen möglich', 'check');
+    });
   }catch(e){ console.error(e); toast('Laden fehlgeschlagen', 'error'); }
 }
 function deleteDayState(datum){
   try{ localStorage.removeItem(dayKey(datum)); }catch(e){}
+  deleteRapporteStore(datum);
   renderSavedDays();
 }
 function fmtSavedAt(iso){
@@ -2218,6 +2269,7 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     ['listDatum','tourenDatum','pdfDatum'].forEach(id=> document.getElementById(id).textContent = targetDatum || 'Dispo');
     renderAll();
     saveDayState(true);
+    saveRapporteStore(targetDatum);
   }catch(err){
     console.error(err);
     statusEl.textContent = 'Fehler beim Einlesen – bitte Dateien prüfen.';
@@ -2737,15 +2789,45 @@ async function buildTourRapportePdf(tour){
   }
   return { bytes: await out.save(), count, missing };
 }
+/* Fehlen die Rapporte (z. B. Tagesdispo aus einer älteren Version geladen), fragt die App
+   direkt nach den Arbeitsrapport-PDFs, liest sie ein und macht dann mit dem Download weiter. */
+function askForRapportFiles(){
+  return new Promise(resolve=>{
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/pdf,.pdf'; inp.multiple = true;
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    let done = false;
+    const finish = (files)=>{ if(done) return; done = true; inp.remove(); resolve(files); };
+    inp.addEventListener('change', ()=> finish([...inp.files]));
+    inp.addEventListener('cancel', ()=> finish([]));
+    inp.click();
+  });
+}
+async function ensureRapporte(){
+  const needSrc = ()=> Object.keys(rapportSrc).length===0;
+  if(rappFiles.length && needSrc()){
+    for(let i=0;i<rappFiles.length;i++) await parseRapportPdf(rappFiles[i].buf.slice(0), i);
+    saveRapporteStore(targetDatum);
+  }
+  if(rappFiles.length && !needSrc()) return true;
+  toast('Bitte die Arbeitsrapporte dieses Tages auswählen', 'warning');
+  const files = await askForRapportFiles();
+  if(!files.length) return false;
+  rappFiles = []; rapportSrc = {};
+  for(const f of files) rappFiles.push({ name:f.name, buf: await fileToArrayBuffer(f) });
+  for(let i=0;i<rappFiles.length;i++) await parseRapportPdf(rappFiles[i].buf.slice(0), i);
+  saveRapporteStore(targetDatum);
+  return true;
+}
 async function downloadTourRapporte(tourId, btn){
   const tour = tours.find(t=>t.id===tourId);
   if(!tour) return;
-  if(!rappFiles.length){ toast('Rapporte sind nicht mehr geladen – bitte die Arbeitsrapporte neu einlesen', 'warning'); return; }
-  const label = btn ? btn.innerHTML : null;
   if(btn){ btn.disabled = true; }
   try{
+    if(!(await ensureRapporte())) return;
     const { bytes, count, missing } = await buildTourRapportePdf(tour);
-    if(!count){ toast('Für diese Tour wurde kein Rapport gefunden', 'warning'); return; }
+    if(!count){ toast('Für diese Tour wurde in den gewählten Rapporten kein Auftrag gefunden', 'warning'); return; }
     downloadBytes(bytes, `${safeFileName('Auftragsrapporte ' + (targetDatum||'') + ' ' + tour.name)}.pdf`);
     toast(missing.length ? `${count} Rapporte geladen · ohne Rapport: ${missing.join(', ')}` : `${count} Rapporte für ${tour.name} geladen`, missing.length?'warning':'check');
   }catch(err){
