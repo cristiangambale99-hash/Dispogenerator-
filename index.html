@@ -1722,6 +1722,7 @@ function loadTours(){
 }
 function saveTours(){
   try{ localStorage.setItem('cs-dispo-tours', JSON.stringify(tours)); }catch(e){}
+  try{ scheduleDaySave(); }catch(e){}
 }
 loadTours();
 function seedDefaultToursIfEmpty(){
@@ -1888,6 +1889,7 @@ function saveDayState(silent){
       orders,
       absenceOrders,
       parsedListRows,
+      tours: JSON.parse(JSON.stringify(tours)),
       listFile: { name: listFile.name, base64: arrayBufferToBase64(listFile.buf) },
       savedAt: new Date().toISOString()
     };
@@ -1934,6 +1936,23 @@ function loadDayState(datum){
     orders = data.orders || [];
     absenceOrders = data.absenceOrders || [];
     parsedListRows = data.parsedListRows || [];
+    // Touren des Tages wiederherstellen (fehlende per ID ergänzen, bestehende bleiben)
+    if(Array.isArray(data.tours)){
+      let added = false;
+      data.tours.forEach(st=>{
+        if(!st || !st.id) return;
+        if(tours.some(t=>t.id===st.id)) return;
+        const sameName = tours.find(t=>t.name.toLowerCase()===String(st.name).toLowerCase());
+        if(sameName){
+          // gleiche Tour unter neuer ID: Aufträge auf die bestehende Tour umhängen
+          orders.concat(absenceOrders).forEach(o=>{
+            if(o.assignedTourId===st.id) o.assignedTourId = sameName.id;
+            if(o.notifiedTourId===st.id) o.notifiedTourId = sameName.id;
+          });
+        } else { tours.push({id:st.id, name:st.name, teamSize:st.teamSize||1, color:st.color}); added = true; }
+      });
+      if(added) saveTours();
+    }
     listFile = data.listFile ? { name: data.listFile.name, buf: base64ToArrayBuffer(data.listFile.base64) } : null;
     document.getElementById('dashResults').hidden = false;
     document.getElementById('btnGoList').hidden = false;
@@ -2442,7 +2461,7 @@ function deleteOrderBtnEl(o){
 function statusBadge(o){
   if(o.assignedTourId){
     const t = tours.find(t=>t.id===o.assignedTourId);
-    const tn = t ? t.name : '?';
+    const tn = t ? t.name : 'Tour fehlt';
     return `<span class="badge b-ok">${tn}${o.assignedTime? ' · '+o.assignedTime : ''}</span>`;
   }
   return `<span class="badge b-warn">Offen</span>`;
