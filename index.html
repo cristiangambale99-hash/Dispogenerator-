@@ -1043,6 +1043,18 @@ td .name{font-weight:600}
           <button class="btn btn-p" id="btnAddTour"><svg><use href="#i-plus"/></svg>Hinzufügen</button>
         </div>
 
+        <div class="card" id="provCard" style="margin:0 0 14px;padding:16px">
+          <h3 class="sec-t" style="margin:0 0 10px">Vorläufig in UH / SPEZ einplanen</h3>
+          <div class="field" style="min-width:auto"><label>Abteilung</label>
+            <div class="seg2">
+              <label><input type="radio" name="provDept" value="UH" checked><span>UH</span></label>
+              <label><input type="radio" name="provDept" value="SPEZ"><span>SPEZ</span></label>
+            </div>
+          </div>
+          <div class="field" style="min-width:auto"><label>Mitarbeiterinnen</label><div id="provChips" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>
+          <p class="muted" style="font-size:12.5px;margin:8px 0">Die Abteilung meldet sich bis spätestens 17:00 Uhr bei den eingeplanten Mitarbeiterinnen, falls sie tatsächlich eingesetzt werden. Der Hinweis erscheint in der Dispo-PDF.</p>
+          <div id="provList"></div>
+        </div>
         <p class="muted" id="rappStatus" style="font-size:13px;margin:0 0 10px"></p>
         <div id="toursWrap" class="toursec"></div>
         <div class="empty" id="toursEmpty"><div class="ic" id="toursEmptyIcon"></div><p>Noch keine Touren angelegt. Oben eine Tour hinzufügen.</p></div>
@@ -1712,6 +1724,7 @@ let targetDatum = null;
 let orders = [];          // aktive Aufträge (ohne Abwesenheiten)
 let absenceOrders = [];
 let tours = [];
+let provisional = [];   // [{name, dept:'UH'|'SPEZ'}] vorläufig eingeplant
 let selectedAuftragNr = null;
 
 function loadTours(){
@@ -1890,6 +1903,7 @@ function saveDayState(silent){
       absenceOrders,
       parsedListRows,
       tours: JSON.parse(JSON.stringify(tours)),
+      provisional,
       listFile: { name: listFile.name, base64: arrayBufferToBase64(listFile.buf) },
       savedAt: new Date().toISOString()
     };
@@ -1936,6 +1950,7 @@ function loadDayState(datum){
     orders = data.orders || [];
     absenceOrders = data.absenceOrders || [];
     parsedListRows = data.parsedListRows || [];
+    provisional = Array.isArray(data.provisional) ? data.provisional : [];
     // Touren des Tages wiederherstellen (fehlende per ID ergänzen, bestehende bleiben)
     if(Array.isArray(data.tours)){
       let added = false;
@@ -2458,6 +2473,36 @@ function deleteOrderBtnEl(o){
   return btn;
 }
 
+
+/* Vorläufige Einplanung in UH / SPEZ */
+function provCandidates(){
+  const names = SPRINGERTEAM.map(m=>m.name);
+  tours.forEach(t=>{ if(t.teamSize===1 && !names.some(n=>n.toLowerCase()===t.name.toLowerCase())) names.push(t.name); });
+  return names;
+}
+function renderProvisional(){
+  const chips = document.getElementById('provChips'), list = document.getElementById('provList');
+  if(!chips || !list) return;
+  chips.innerHTML = provCandidates().map(n=>{
+    const on = provisional.some(p=>p.name===n);
+    return `<button type="button" class="btn ${on?'btn-p':''}" data-prov="${n}" style="padding:6px 12px">${on?'✓ ':''}${n}</button>`;
+  }).join('');
+  list.innerHTML = provisional.length ? `<table class="tbl" style="width:100%"><tbody>` + provisional.map((p,i)=>
+    `<tr><td><b>${p.name}</b></td><td><span class="badge b-ok">${p.dept}</span></td><td class="muted">wartet auf Rückmeldung bis 17:00</td><td style="text-align:right"><button type="button" class="btn" data-provdel="${i}" aria-label="Entfernen">✕</button></td></tr>`).join('') + `</tbody></table>` : '';
+}
+(function initProvisional(){
+  const card = document.getElementById('provCard'); if(!card) return;
+  card.addEventListener('click', e=>{
+    const c = e.target.closest('[data-prov]'), d = e.target.closest('[data-provdel]');
+    if(c){
+      const n = c.dataset.prov, i = provisional.findIndex(p=>p.name===n);
+      if(i>=0) provisional.splice(i,1);
+      else provisional.push({ name:n, dept: (document.querySelector('input[name="provDept"]:checked')||{}).value || 'UH' });
+    } else if(d){ provisional.splice(+d.dataset.provdel,1); } else return;
+    renderProvisional(); scheduleDaySave();
+  });
+})();
+
 function statusBadge(o){
   if(o.assignedTourId){
     const t = tours.find(t=>t.id===o.assignedTourId);
@@ -2769,7 +2814,7 @@ async function generateTourDispoPdf(){
   /* Legende wie bisher: Touren mit Stunden, darunter Schlüssel je Auftrag in Tourfarbe */
   const keyOrders = [];
   activeTours.forEach(t=> byTour[t.id].forEach(o=>{ if(o.hasKey) keyOrders.push({o, t}); }));
-  const legendH = 16 + activeTours.length*14 + (keyOrders.length ? 26 + keyOrders.length*14 : 0);
+  const legendH = 16 + activeTours.length*14 + (keyOrders.length ? 26 + keyOrders.length*14 : 0) + provisional.length*0 + (provisional.length ? 26 + 44*new Set(provisional.map(p=>p.dept)).size : 0);
   if(y - legendH < BOTTOM) newPage(false);
   page.drawText('Legende Touren:', { x:L, y, size:9.5, font:bold, color:INK });
   y -= 6;
@@ -2789,6 +2834,18 @@ async function generateTourDispoPdf(){
       drawKeyBadge(page, L+6, y+3.5, rgb, col);
       page.drawText(T(o.auftragNr), { x:L+20, y, size:9.5, font:reg, color:rgb(col.r,col.g,col.b) });
     });
+  }
+  if(provisional.length){
+    y -= 26;
+    ['UH','SPEZ'].forEach(dept=>{
+      const names = provisional.filter(p=>p.dept===dept).map(p=>p.name);
+      if(!names.length) return;
+      page.drawText(T(`Provisorisch in ${dept} eingeplant:`), { x:L, y, size:9.5, font:bold, color:INK });
+      y -= 13; page.drawText(T(names.join(', ')), { x:L+2, y, size:9.5, font:reg, color:INK });
+      y -= 13; page.drawText('Die Abteilung meldet sich bis spätestens 17:00 Uhr bei den betroffenen Mitarbeiterinnen.', { x:L+2, y, size:8.5, font:reg, color:GREY });
+      y -= 18;
+    });
+    y += 18 - 0;
   }
   if(absenceOrders.length){
     y -= 26;
@@ -3051,6 +3108,19 @@ const CS_LOGO_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAARcAAABY
    informiert worden (o.notifiedTourId gesetzt) und bekommt jetzt eine geänderte
    Zuteilung, wird das als "aktualisierte" Zeitmitteilung mit eigener Kennzeichnung
    verschickt statt der Erstmitteilung. */
+/* "morgen" nur, wenn der Einsatztag wirklich der nächste Kalendertag ist,
+   sonst der Wochentag (z. B. Freitag-Dispo für Montag -> "Montag"). */
+function dayReference(datum){
+  const m = (datum||'').match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if(!m) return { word:'morgen', prep:'morgen', heading:'morgen' };
+  const t = new Date(+m[3], +m[2]-1, +m[1]);
+  const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((t - today)/86400000);
+  const wd = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][t.getDay()];
+  if(diff===1) return { word:'morgen', prep:'morgen', heading:'morgen' };
+  if(diff===0) return { word:'heute', prep:'heute', heading:'heute' };
+  return { word:wd, prep:'am '+wd, heading:wd };
+}
 function buildTimeNotificationEmail(o){
   const datumLong = formatDatumLong(targetDatum);
   const isUpdate = !!o.notifiedTourId;
@@ -3059,7 +3129,7 @@ function buildTimeNotificationEmail(o){
           Da uns für diese Reinigung noch kein Schlüssel vorliegt, bitten wir Sie, zum genannten Zeitpunkt selbst vor Ort zu sein bzw. uns den Zutritt zu ermöglichen.
         </p>`;
   const eyebrow = isUpdate ? 'Aktualisierte Zeitmitteilung' : 'Zeitmitteilung';
-  const heading = isUpdate ? 'Ihr Reinigungstermin wurde angepasst' : 'Zeitmitteilung für morgen';
+  const heading = isUpdate ? 'Ihr Reinigungstermin wurde angepasst' : `Zeitmitteilung für ${dayReference(targetDatum).heading}`;
   const intro = isUpdate
     ? 'Wir müssen Ihnen eine kurze Anpassung zu der bereits angekündigten Reinigung mitteilen. Der neue Stand:'
     : 'Die Ersatzreinigung durch unser Springer-Team findet wie folgt statt:';
@@ -3102,7 +3172,7 @@ function buildTimeNotificationEmail(o){
         </div>
       </div>
     </div>`;
-  const subject = (isUpdate ? 'Aktualisierung: ' : '') + `Ihre Reinigung morgen, ${datumLong} – ca. ${o.assignedTime} Uhr`;
+  const subject = (isUpdate ? 'Aktualisierung: ' : '') + `Ihre Reinigung ${dayReference(targetDatum).prep}, ${datumLong} – ca. ${o.assignedTime} Uhr`;
   return { subject, html };
 }
 
@@ -3615,6 +3685,7 @@ document.getElementById('addOrderForm').addEventListener('keydown', e=>{ if(e.ke
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.getElementById('addOrderModal').classList.contains('open')) closeAddOrderModal(); });
 
 function renderAll(){
+  try{ renderProvisional(); }catch(e){}
   renderDashboard();
   renderOrdersList();
   renderTouren();
