@@ -3225,7 +3225,7 @@ function isNotifyExcludedType(o){
 
 /* ===== Beekeeper: Dispo + Auftragsrapporte in den Gruppenchat ===== */
 const BK_KEY = 'cs-dispo-beekeeper';
-function bkEnabled(){ try{ const v = localStorage.getItem(BK_KEY); return v===null ? true : v==='1'; }catch(e){ return true; } }
+function bkEnabled(){ try{ const v = localStorage.getItem(BK_KEY); return v===null ? false : v==='1'; }catch(e){ return false; } }
 (function initBkToggle(){
   const el = document.getElementById('bkToggle'); if(!el) return;
   el.checked = bkEnabled();
