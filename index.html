@@ -1135,7 +1135,7 @@ td .name{font-weight:600}
   </div>
   <div style="padding:18px 20px;overflow-y:auto;flex:1 1 auto">
     <p class="muted" id="notifyModalIntro" style="font-size:13.5px;margin:0 0 14px"></p>
-    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;margin:0 0 12px"><input type="checkbox" id="bkToggle" style="margin-top:3px"><span>Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden</span></label>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;margin:0 0 12px"><input type="checkbox" id="bkToggle" style="margin-top:3px"><span id="bkLabel">Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden</span></label>
     <div id="bkStatus" class="muted" style="font-size:13px;margin:0 0 12px"></div>
     <div id="notifyList"></div>
   </div>
@@ -1726,6 +1726,7 @@ let targetDatum = null;
 let orders = [];          // aktive Aufträge (ohne Abwesenheiten)
 let absenceOrders = [];
 let tours = [];
+let bkSentAt = null;    // Zeitpunkt, wann die Dispo dieses Tages in Beekeeper ging
 let provisional = [];   // [{name, dept:'UH'|'SPEZ'}] vorläufig eingeplant
 let selectedAuftragNr = null;
 
@@ -1906,6 +1907,7 @@ function saveDayState(silent){
       parsedListRows,
       tours: JSON.parse(JSON.stringify(tours)),
       provisional,
+      bkSentAt,
       listFile: { name: listFile.name, base64: arrayBufferToBase64(listFile.buf) },
       savedAt: new Date().toISOString()
     };
@@ -1953,6 +1955,7 @@ function loadDayState(datum){
     absenceOrders = data.absenceOrders || [];
     parsedListRows = data.parsedListRows || [];
     provisional = Array.isArray(data.provisional) ? data.provisional : [];
+    bkSentAt = data.bkSentAt || null;
     // Touren des Tages wiederherstellen (fehlende per ID ergänzen, bestehende bleiben)
     if(Array.isArray(data.tours)){
       let added = false;
@@ -2329,6 +2332,9 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     absenceOrders = merged.filter(o=>o.isAbsence);
     orders = merged.filter(o=>!o.isAbsence);
     const draftCount = applyPreAssignedDrafts(orders, tours);
+    // Beekeeper-Stand/Einplanung: nur vom gleichen, bereits gespeicherten Tag übernehmen
+    bkSentAt = null; provisional = [];
+    try{ const prev = JSON.parse(localStorage.getItem(dayKey(targetDatum))||'null'); if(prev){ bkSentAt = prev.bkSentAt||null; provisional = Array.isArray(prev.provisional)?prev.provisional:[]; } }catch(e){}
 
     statusEl.textContent = `${orders.length} Aufträge eingelesen${targetDatum ? ' für ' + targetDatum : ''}${draftCount>0 ? ' · '+draftCount+' bereits als Entwurf zugeteilt (aus Disposition übernommen)' : ''}.`;
     toast(draftCount>0 ? `Aufträge eingelesen · ${draftCount} als Entwurf übernommen` : 'Aufträge eingelesen', 'check');
@@ -3263,10 +3269,14 @@ async function sendDispoToBeekeeper(){
     }
     const dm = targetDatum.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
     const wd = dm ? ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][new Date(+dm[3],+dm[2]-1,+dm[1]).getDay()] : 'Tag';
-    const text = `Guten Tag @all\n\nAnbei die Dispo für den ${wd}, ${targetDatum}.\n\nVielen Dank und liebe Grüsse`;
+    const isUpdate = !!bkSentAt;
+    const text = isUpdate
+      ? `*Wichtig*\n\nGuten Tag @all\n\nAnbei die angepasste Dispo für den ${wd}, ${targetDatum}.\n\nVielen Dank und liebe Grüsse`
+      : `Guten Tag @all\n\nAnbei die Dispo für den ${wd}, ${targetDatum}.\n\nVielen Dank und liebe Grüsse`;
     bkSetStatus('Beekeeper: Nachricht wird gesendet …');
     await bkCall({ action:'message', text, files: refs });
-    bkSetStatus(`<span style="color:#1B8384;font-weight:600">✓ In Beekeeper gesendet</span> (${files.length} Datei${files.length>1?'en':''})${notes.length?' · '+notes.join(', '):''}`);
+    bkSentAt = new Date().toISOString(); saveDayState(true);
+    bkSetStatus(`<span style="color:#1B8384;font-weight:600">✓ ${isUpdate?'Angepasste Dispo':'Dispo'} in Beekeeper gesendet</span> (${files.length} Datei${files.length>1?'en':''})${notes.length?' · '+notes.join(', '):''}`);
     toast('Dispo in Beekeeper gesendet', 'check');
   }catch(err){
     console.error(err);
@@ -3320,6 +3330,8 @@ function notifyRowHtml(o, statusHtml, swatchColor){
 }
 
 function renderNotifyList(){
+  const bkl = document.getElementById('bkLabel');
+  if(bkl) bkl.textContent = bkSentAt ? 'Angepasste Dispo (mit Hinweis «Wichtig») und alle Auftragsrapporte in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden' : 'Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden';
   const listEl = document.getElementById('notifyList');
   const introEl = document.getElementById('notifyModalIntro');
   const sendBtn = document.getElementById('notifySendBtn');
