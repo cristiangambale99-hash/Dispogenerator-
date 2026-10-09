@@ -1135,6 +1135,8 @@ td .name{font-weight:600}
   </div>
   <div style="padding:18px 20px;overflow-y:auto;flex:1 1 auto">
     <p class="muted" id="notifyModalIntro" style="font-size:13.5px;margin:0 0 14px"></p>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;margin:0 0 12px"><input type="checkbox" id="bkToggle" style="margin-top:3px"><span>Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden</span></label>
+    <div id="bkStatus" class="muted" style="font-size:13px;margin:0 0 12px"></div>
     <div id="notifyList"></div>
   </div>
   <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
@@ -2709,7 +2711,7 @@ document.getElementById('newTourName').addEventListener('keydown', e=>{ if(e.key
    reicht der Platz nicht, läuft die Tour auf einer zweiten Seite sauber weiter
    (Tourkopf wird wiederholt). Legende wie bisher am Schluss.
 ===================================================================== */
-async function generateTourDispoPdf(){
+async function generateTourDispoPdf(opts){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   const doc = await PDFDocument.create();
   const reg = await doc.embedFont(StandardFonts.Helvetica);
@@ -2861,6 +2863,7 @@ async function generateTourDispoPdf(){
 
   const bytes = await doc.save();
   const dateForFile = (targetDatum||'').replace(/\./g,'-');
+  if(opts && opts.returnBytes) return { bytes, name:`Disposition_${dateForFile}_nach_Tour.pdf` };
   downloadBytes(bytes, `Disposition_${dateForFile}_nach_Tour.pdf`);
 }
 
@@ -3213,6 +3216,65 @@ function isNotifyExcludedType(o){
   });
 })();
 
+
+/* ===== Beekeeper: Dispo + Auftragsrapporte in den Gruppenchat ===== */
+const BK_KEY = 'cs-dispo-beekeeper';
+function bkEnabled(){ try{ const v = localStorage.getItem(BK_KEY); return v===null ? true : v==='1'; }catch(e){ return true; } }
+(function initBkToggle(){
+  const el = document.getElementById('bkToggle'); if(!el) return;
+  el.checked = bkEnabled();
+  el.addEventListener('change', ()=>{ try{ localStorage.setItem(BK_KEY, el.checked?'1':'0'); }catch(e){} });
+})();
+function bytesToBase64(bytes){
+  let bin = ''; const u = new Uint8Array(bytes); const CH = 0x8000;
+  for(let i=0;i<u.length;i+=CH) bin += String.fromCharCode.apply(null, u.subarray(i,i+CH));
+  return btoa(bin);
+}
+async function bkCall(payload){
+  const r = await fetch('/api/send-beekeeper', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  let j = {}; try{ j = await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+  return j;
+}
+function bkSetStatus(html){ const el = document.getElementById('bkStatus'); if(el) el.innerHTML = html; }
+let bkBusy = false;
+async function sendDispoToBeekeeper(){
+  if(bkBusy) return; bkBusy = true;
+  const notes = [];
+  try{
+    bkSetStatus('Beekeeper: PDFs werden erstellt …');
+    const dispo = await generateTourDispoPdf({ returnBytes:true });
+    const files = [{ name: dispo.name, bytes: dispo.bytes }];
+    const activeTours = tours.filter(t=> orders.some(o=>o.assignedTourId===t.id));
+    if(activeTours.length){
+      if(await ensureRapporte()){
+        for(const t of activeTours){
+          const r = await buildTourRapportePdf(t);
+          if(r.count) files.push({ name: `${safeFileName('Auftragsrapporte ' + (targetDatum||'') + ' ' + t.name)}.pdf`, bytes: r.bytes });
+          else notes.push(`kein Rapport für ${t.name}`);
+        }
+      } else notes.push('ohne Auftragsrapporte (nicht ausgewählt)');
+    }
+    const refs = [];
+    for(let i=0;i<files.length;i++){
+      bkSetStatus(`Beekeeper: Datei ${i+1} von ${files.length} wird hochgeladen …`);
+      const up = await bkCall({ action:'upload', name: files[i].name, base64: bytesToBase64(files[i].bytes) });
+      refs.push(up.file);
+    }
+    const dm = targetDatum.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    const wd = dm ? ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][new Date(+dm[3],+dm[2]-1,+dm[1]).getDay()] : 'Tag';
+    const text = `Guten Tag @all\n\nAnbei die Dispo für den ${wd}, ${targetDatum}.\n\nVielen Dank und liebe Grüsse`;
+    bkSetStatus('Beekeeper: Nachricht wird gesendet …');
+    await bkCall({ action:'message', text, files: refs });
+    bkSetStatus(`<span style="color:#1B8384;font-weight:600">✓ In Beekeeper gesendet</span> (${files.length} Datei${files.length>1?'en':''})${notes.length?' · '+notes.join(', '):''}`);
+    toast('Dispo in Beekeeper gesendet', 'check');
+  }catch(err){
+    console.error(err);
+    bkSetStatus(`<span style="color:#b84a3e;font-weight:600">✗ Beekeeper-Versand fehlgeschlagen:</span> ${String(err.message||err)} <button type="button" class="btn btn-s" id="bkRetry" style="padding:3px 10px;font-size:12px;margin-left:8px">Erneut senden</button>`);
+    const b = document.getElementById('bkRetry'); if(b) b.addEventListener('click', ()=> sendDispoToBeekeeper());
+  }finally{ bkBusy = false; }
+}
+
 function pendingNotifications(){
   return orders.filter(o=>
     o.assignedTourId && o.assignedTime && o.customerEmail &&
@@ -3299,7 +3361,9 @@ function renderNotifyList(){
   if(pending.length===0){
     introEl.textContent = 'Keine neuen oder geänderten Zeitmitteilungen zu versenden.';
     listEl.innerHTML = '';
-    sendBtn.hidden = true;
+    sendBtn.hidden = !bkEnabled();
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Dispo in Beekeeper senden';
     cancelBtn.textContent = 'Abbrechen';
     return;
   }
@@ -3307,7 +3371,7 @@ function renderNotifyList(){
   sendBtn.disabled = false;
   sendBtn.textContent = 'Jetzt senden';
   cancelBtn.textContent = 'Abbrechen';
-  introEl.textContent = `${pending.length} Kunde${pending.length>1?'n':''} erhalten eine E-Mail mit dem morgigen Termin (${formatDatumLong(targetDatum)}):`;
+  introEl.textContent = `${pending.length} Kunde${pending.length>1?'n':''} erhalten eine E-Mail mit dem Termin ${dayReference(targetDatum).prep} (${formatDatumLong(targetDatum)}):`;
   listEl.innerHTML = pending.map(o=> notifyRowHtml(o, '', o.hasKey?'#60BEB3':'#e0a03a')).join('');
 }
 
@@ -3363,6 +3427,7 @@ document.getElementById('notifyScrim').addEventListener('click', closeNotifyModa
 
 document.getElementById('notifySendBtn').addEventListener('click', ()=>{
   const pending = pendingNotifications();
+  if(bkEnabled()) sendDispoToBeekeeper();   // zuerst, solange die Klick-Berechtigung (Dateiauswahl) gilt
   if(pending.length===0) return;
   notifyBatch = pending.map(o=>({ o, status:'sending' }));
   renderNotifyList();
