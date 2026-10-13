@@ -1726,6 +1726,8 @@ let targetDatum = null;
 let orders = [];          // aktive Aufträge (ohne Abwesenheiten)
 let absenceOrders = [];
 let tours = [];
+let probes = {};        // {tourId:{name,phone}} Probedame je Tour (nur für diesen Tag)
+let freeTours = [];     // Tour-IDs, die für den Tag freigegeben (nicht verplant) sind
 let bkSentAt = null;    // Zeitpunkt, wann die Dispo dieses Tages in Beekeeper ging
 let provisional = [];   // [{name, dept:'UH'|'SPEZ'}] vorläufig eingeplant
 let selectedAuftragNr = null;
@@ -1908,6 +1910,8 @@ function saveDayState(silent){
       tours: JSON.parse(JSON.stringify(tours)),
       provisional,
       bkSentAt,
+      probes,
+      freeTours,
       listFile: { name: listFile.name, base64: arrayBufferToBase64(listFile.buf) },
       savedAt: new Date().toISOString()
     };
@@ -1956,6 +1960,8 @@ function loadDayState(datum){
     parsedListRows = data.parsedListRows || [];
     provisional = Array.isArray(data.provisional) ? data.provisional : [];
     bkSentAt = data.bkSentAt || null;
+    probes = (data.probes && typeof data.probes==='object') ? data.probes : {};
+    freeTours = Array.isArray(data.freeTours) ? data.freeTours : [];
     // Touren des Tages wiederherstellen (fehlende per ID ergänzen, bestehende bleiben)
     if(Array.isArray(data.tours)){
       let added = false;
@@ -1969,6 +1975,8 @@ function loadDayState(datum){
             if(o.assignedTourId===st.id) o.assignedTourId = sameName.id;
             if(o.notifiedTourId===st.id) o.notifiedTourId = sameName.id;
           });
+          if(probes[st.id]){ probes[sameName.id] = probes[st.id]; delete probes[st.id]; }
+          freeTours = freeTours.map(id=> id===st.id ? sameName.id : id);
         } else { tours.push({id:st.id, name:st.name, teamSize:st.teamSize||1, color:st.color}); added = true; }
       });
       if(added) saveTours();
@@ -2007,8 +2015,13 @@ function renderSavedDays(){
   wrap.innerHTML = days.map(d=>{
     const openCount = (d.orders||[]).filter(o=>!o.assignedTourId).length;
     const isCurrent = d.targetDatum===targetDatum;
+    const assignedCount = (d.orders||[]).length - openCount;
+    const nTours = new Set((d.orders||[]).filter(o=>o.assignedTourId).map(o=>o.assignedTourId)).size;
+    const nProbe = Object.values(d.probes||{}).filter(p=>p && (p.name||p.phone)).length;
+    const nFree = (d.freeTours||[]).length;
+    const extra = (nProbe? ` · ${nProbe} Probedame`:'') + (nFree? ` · ${nFree} frei`:'');
     return `<div class="savedday-row">
-      <div class="tx"><b>${d.targetDatum}</b><small>Gespeichert ${fmtSavedAt(d.savedAt)} · ${(d.orders||[]).length} Aufträge${openCount>0 ? ', '+openCount+' offen' : ''}</small></div>
+      <div class="tx"><b>${d.targetDatum}</b><small>Zuletzt gesichert ${fmtSavedAt(d.savedAt)} · ${(d.orders||[]).length} Aufträge · ${nTours} ${nTours===1?'Tour':'Touren'} · ${assignedCount} zugeteilt${openCount>0 ? ', '+openCount+' offen' : ''}${extra}</small></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-s" data-load-day="${d.targetDatum}">${isCurrent?'Aktuell geladen':'Laden'}</button>
         <button class="icon-btn" aria-label="Gespeicherte Dispo löschen" data-del-day="${d.targetDatum}"><svg><use href="#i-trash"/></svg></button>
@@ -2333,8 +2346,8 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     orders = merged.filter(o=>!o.isAbsence);
     const draftCount = applyPreAssignedDrafts(orders, tours);
     // Beekeeper-Stand/Einplanung: nur vom gleichen, bereits gespeicherten Tag übernehmen
-    bkSentAt = null; provisional = [];
-    try{ const prev = JSON.parse(localStorage.getItem(dayKey(targetDatum))||'null'); if(prev){ bkSentAt = prev.bkSentAt||null; provisional = Array.isArray(prev.provisional)?prev.provisional:[]; } }catch(e){}
+    bkSentAt = null; provisional = []; probes = {}; freeTours = [];
+    try{ const prev = JSON.parse(localStorage.getItem(dayKey(targetDatum))||'null'); if(prev){ bkSentAt = prev.bkSentAt||null; probes = prev.probes||{}; freeTours = prev.freeTours||[]; provisional = Array.isArray(prev.provisional)?prev.provisional:[]; } }catch(e){}
 
     statusEl.textContent = `${orders.length} Aufträge eingelesen${targetDatum ? ' für ' + targetDatum : ''}${draftCount>0 ? ' · '+draftCount+' bereits als Entwurf zugeteilt (aus Disposition übernommen)' : ''}.`;
     toast(draftCount>0 ? `Aufträge eingelesen · ${draftCount} als Entwurf übernommen` : 'Aufträge eingelesen', 'check');
@@ -2762,12 +2775,19 @@ async function generateTourDispoPdf(opts){
     [[L+10,'Nr.'],[L+36,'Zeit'],[L+108,'Std.'],[L+152,'Auftrag'],[L+212,'Adresse'],[L+388,'Bezeichnung']].forEach(([x,t])=> page.drawText(t, { x, y, size:8.5, font:reg, color:GREY }));
     y -= 6; page.drawLine({ start:{x:L,y}, end:{x:R,y}, thickness:.6, color:LINE });
   };
-  const band = (label, rightText, col, cont) => {
+  const band = (label, rightText, col, cont, probeTxt) => {
     page.drawRectangle({ x:L, y:y-22, width:R-L, height:22, color:rgb(col.r,col.g,col.b) });
     page.drawText(T(label.toUpperCase() + (cont?'  (Fortsetzung)':'')), { x:L+10, y:y-15, size:12, font:bold, color:rgb(1,1,1) });
     const tw = reg.widthOfTextAtSize(T(rightText), 10);
     page.drawText(T(rightText), { x:R-10-tw, y:y-15, size:10, font:reg, color:rgb(1,1,1) });
-    y -= 22; colHeads();
+    y -= 22;
+    if(probeTxt){
+      page.drawRectangle({ x:L, y:y-20, width:R-L, height:20, color:rgb(1,.965,.925) });
+      page.drawText('Probedame:', { x:L+10, y:y-14, size:9.5, font:bold, color:INK });
+      page.drawText(T(probeTxt), { x:L+10+bold.widthOfTextAtSize('Probedame:', 9.5)+6, y:y-14, size:9.5, font:reg, color:INK });
+      y -= 20;
+    }
+    colHeads();
   };
   const ROW = 24;
   const need = (rows) => y - rows*ROW < BOTTOM;
@@ -2797,10 +2817,11 @@ async function generateTourDispoPdf(opts){
     const items = byTour[t.id];
     const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     const right = `${items.length} ${items.length===1?'Auftrag':'Aufträge'}  ·  ${fmtHoursShort(mins)}`;
-    if(need(3)) newPage(false);
-    band(t.name + (t.teamSize>1?' (2 Personen)':''), right, col, false);
+    const pr = probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? [probes[t.id].name, probes[t.id].phone ? 'Tel. '+probes[t.id].phone : ''].filter(Boolean).join(' · ') : '';
+    if(need(pr?4:3)) newPage(false);
+    band(t.name + (t.teamSize>1?' (2 Personen)':''), right, col, false, pr);
     items.forEach((o,i)=>{
-      if(need(1)){ newPage(false); band(t.name, right, col, true); }
+      if(need(1)){ newPage(false); band(t.name, right, col, true, pr); }
       const start = timeToMin(o.assignedTime);
       const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
       drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`, t.teamSize);
@@ -2822,7 +2843,7 @@ async function generateTourDispoPdf(opts){
   /* Legende wie bisher: Touren mit Stunden, darunter Schlüssel je Auftrag in Tourfarbe */
   const keyOrders = [];
   activeTours.forEach(t=> byTour[t.id].forEach(o=>{ if(o.hasKey) keyOrders.push({o, t}); }));
-  const legendH = 16 + activeTours.length*14 + (keyOrders.length ? 26 + keyOrders.length*14 : 0) + provisional.length*0 + (provisional.length ? 26 + 44*new Set(provisional.map(p=>p.dept)).size : 0);
+  const legendH = 16 + activeTours.length*14 + (keyOrders.length ? 26 + keyOrders.length*14 : 0) + (freeTours.length ? 40 : 0) +  (provisional.length ? 26 + 44*new Set(provisional.map(p=>p.dept)).size : 0);
   if(y - legendH < BOTTOM) newPage(false);
   page.drawText('Legende Touren:', { x:L, y, size:9.5, font:bold, color:INK });
   y -= 6;
@@ -2831,7 +2852,7 @@ async function generateTourDispoPdf(opts){
     const col = hexToRgb01(t.color);
     const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     page.drawRectangle({ x:L, y:y-1, width:9, height:9, color:rgb(col.r,col.g,col.b) });
-    page.drawText(T(`${t.name}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
+    page.drawText(T(`${t.name}  (${fmtHoursShort(mins)})${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' · mit Probedame' : ''}`), { x:L+16, y, size:9.5, font:reg, color:INK });
   });
   if(keyOrders.length){
     y -= 26;
@@ -2842,6 +2863,12 @@ async function generateTourDispoPdf(opts){
       drawKeyBadge(page, L+6, y+3.5, rgb, col);
       page.drawText(T(o.auftragNr), { x:L+20, y, size:9.5, font:reg, color:rgb(col.r,col.g,col.b) });
     });
+  }
+  const freeNames = tours.filter(t=> freeTours.includes(t.id) && !(byTour[t.id]||[]).length).map(t=>t.name);
+  if(freeNames.length){
+    y -= 26;
+    page.drawText('Springerinnen frei:', { x:L, y, size:9.5, font:bold, color:INK });
+    y -= 13; page.drawText(fit(freeNames.join(' · '), reg, 9.5, R-L-16), { x:L+2, y, size:9.5, font:reg, color:INK });
   }
   if(provisional.length){
     y -= 26;
@@ -2995,6 +3022,14 @@ function renderTouren(){
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
       </div>
+      <div class="probe-row" style="padding:0 18px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        ${probes[t.id] ? `
+          <div style="flex:1;min-width:160px"><label class="muted" style="font-size:11.5px;display:block;margin-bottom:3px">Probedame (Name)</label><input type="text" data-probe-name="${t.id}" value="${(probes[t.id].name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid #cfd8db;border-radius:8px;font:inherit"></div>
+          <div style="flex:1;min-width:140px"><label class="muted" style="font-size:11.5px;display:block;margin-bottom:3px">Telefon</label><input type="tel" data-probe-phone="${t.id}" value="${(probes[t.id].phone||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid #cfd8db;border-radius:8px;font:inherit"></div>
+          <button class="btn btn-s" style="padding:6px 10px;font-size:13px" data-probe-del="${t.id}" aria-label="Probedame entfernen">×</button>
+        ` : `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-probe-add="${t.id}">+ Probedame hinzufügen</button>`}
+        ${items.length===0 ? `<button class="btn btn-s ${freeTours.includes(t.id)?'btn-p':''}" style="padding:6px 12px;font-size:13px;margin-left:auto" data-free="${t.id}">${freeTours.includes(t.id)?'✓ Frei (auf Dispo)':'Frei geben'}</button>` : ''}
+      </div>
       ${items.length===0 ? '<p class="muted" style="padding:0 18px 16px;font-size:13.5px">Noch keine Aufträge zugeteilt.</p>' :
         items.map(o=>{
           const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
@@ -3027,6 +3062,11 @@ function renderTouren(){
       mergeTours(sourceId, card.dataset.tourDrop);
     });
   });
+  wrap.querySelectorAll('[data-probe-add]').forEach(b=> b.addEventListener('click', ()=>{ probes[b.dataset.probeAdd] = { name:'', phone:'' }; renderAll(); const i = wrap.querySelector(`[data-probe-name="${b.dataset.probeAdd}"]`); if(i) i.focus(); }));
+  wrap.querySelectorAll('[data-probe-del]').forEach(b=> b.addEventListener('click', ()=>{ delete probes[b.dataset.probeDel]; renderAll(); }));
+  wrap.querySelectorAll('[data-probe-name]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probeName]){ probes[i.dataset.probeName].name = i.value; scheduleDaySave(); } }));
+  wrap.querySelectorAll('[data-probe-phone]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probePhone]){ probes[i.dataset.probePhone].phone = i.value; scheduleDaySave(); } }));
+  wrap.querySelectorAll('[data-free]').forEach(b=> b.addEventListener('click', ()=>{ const id = b.dataset.free; const k = freeTours.indexOf(id); if(k>=0) freeTours.splice(k,1); else freeTours.push(id); renderAll(); }));
   wrap.querySelectorAll('[data-rm]').forEach(btn=> btn.addEventListener('click', ()=> removeTour(btn.dataset.rm)));
   wrap.querySelectorAll('[data-unassign]').forEach(btn=> btn.addEventListener('click', ()=>{
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
