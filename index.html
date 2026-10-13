@@ -2783,8 +2783,8 @@ async function generateTourDispoPdf(opts){
     y -= 22;
     if(probeTxt){
       page.drawRectangle({ x:L, y:y-20, width:R-L, height:20, color:rgb(1,.965,.925) });
-      page.drawText('Probedame:', { x:L+10, y:y-14, size:9.5, font:bold, color:INK });
-      page.drawText(T(probeTxt), { x:L+10+bold.widthOfTextAtSize('Probedame:', 9.5)+6, y:y-14, size:9.5, font:reg, color:INK });
+      page.drawText('Probedame', { x:L+10, y:y-14, size:9.5, font:bold, color:INK });
+      page.drawText(T(probeTxt), { x:L+10+bold.widthOfTextAtSize('Probedame', 9.5)+6, y:y-14, size:9.5, font:reg, color:INK });
       y -= 20;
     }
     colHeads();
@@ -2818,8 +2818,8 @@ async function generateTourDispoPdf(opts){
     const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     const right = `${items.length} ${items.length===1?'Auftrag':'Aufträge'}  ·  ${fmtHoursShort(mins)}`;
     const pb = probes[t.id] || {}; const hasPb = !!(pb.name||pb.phone);
-    const pr = (pb.phone||'').trim();
-    const tourLabel = t.name + (hasPb ? ' + ' + ((pb.name||'').trim() || 'Probedame') : '');
+    const pr = hasPb ? [(pb.name||'').trim(), (pb.phone||'').trim()].filter(Boolean).join(': ') : '';
+    const tourLabel = t.name + (hasPb ? ' + Probedame' : '');
     if(need(pr?4:3)) newPage(false);
     band(tourLabel + (t.teamSize>1?' (2 Personen)':''), right, col, false, pr);
     items.forEach((o,i)=>{
@@ -2854,7 +2854,7 @@ async function generateTourDispoPdf(opts){
     const col = hexToRgb01(t.color);
     const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     page.drawRectangle({ x:L, y:y-1, width:9, height:9, color:rgb(col.r,col.g,col.b) });
-    page.drawText(T(`${t.name}${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' + ' + ((probes[t.id].name||'').trim() || 'Probedame') : ''}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
+    page.drawText(T(`${t.name}${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' + Probedame' : ''}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
   });
   if(keyOrders.length){
     y -= 26;
