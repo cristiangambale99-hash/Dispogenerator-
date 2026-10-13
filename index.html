@@ -2817,11 +2817,13 @@ async function generateTourDispoPdf(opts){
     const items = byTour[t.id];
     const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     const right = `${items.length} ${items.length===1?'Auftrag':'Aufträge'}  ·  ${fmtHoursShort(mins)}`;
-    const pr = probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? [probes[t.id].name, probes[t.id].phone ? 'Tel. '+probes[t.id].phone : ''].filter(Boolean).join(' · ') : '';
+    const pb = probes[t.id] || {}; const hasPb = !!(pb.name||pb.phone);
+    const pr = (pb.phone||'').trim();
+    const tourLabel = t.name + (hasPb ? ' + ' + ((pb.name||'').trim() || 'Probedame') : '');
     if(need(pr?4:3)) newPage(false);
-    band(t.name + (t.teamSize>1?' (2 Personen)':''), right, col, false, pr);
+    band(tourLabel + (t.teamSize>1?' (2 Personen)':''), right, col, false, pr);
     items.forEach((o,i)=>{
-      if(need(1)){ newPage(false); band(t.name, right, col, true, pr); }
+      if(need(1)){ newPage(false); band(tourLabel, right, col, true, pr); }
       const start = timeToMin(o.assignedTime);
       const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
       drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`, t.teamSize);
@@ -2852,7 +2854,7 @@ async function generateTourDispoPdf(opts){
     const col = hexToRgb01(t.color);
     const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
     page.drawRectangle({ x:L, y:y-1, width:9, height:9, color:rgb(col.r,col.g,col.b) });
-    page.drawText(T(`${t.name}  (${fmtHoursShort(mins)})${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' · mit Probedame' : ''}`), { x:L+16, y, size:9.5, font:reg, color:INK });
+    page.drawText(T(`${t.name}${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' + ' + ((probes[t.id].name||'').trim() || 'Probedame') : ''}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
   });
   if(keyOrders.length){
     y -= 26;
