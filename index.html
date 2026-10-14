@@ -883,6 +883,26 @@ td .name{font-weight:600}
 .pnl-assign{background:var(--cs-bg-soft);border:1px solid var(--cs-line);border-radius:12px;padding:14px;margin-top:6px}
 .hintbox{background:var(--cs-aqua-bg);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:12px}
 .warnbox{background:var(--cs-warn-bg);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:12px;color:var(--cs-warn)}
+
+/* ===== Abteilungswahl + Sync ===== */
+#gate{min-height:100vh;display:grid;place-items:center;background:var(--cs-head);padding:24px 16px}
+body:not(.dept-none) #gate{display:none}
+.dept-none>.app,.dept-none>.drawer,.dept-none>.toast{display:none!important}
+.gate-in{width:100%;max-width:760px;text-align:center}
+.gm{display:inline-grid;margin-bottom:18px}
+.gate-in h1{font-weight:300;letter-spacing:.08em;font-size:clamp(28px,4vw,40px);color:var(--cs-brand-text);margin:6px 0 28px}
+.deptcard{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:14px;padding:34px 20px;cursor:pointer;background:#fff;border:1px solid var(--cs-line);border-radius:14px;transition:border-color .18s ease-out,transform .18s ease-out}
+.deptcard:hover{border-color:var(--cs-brand)}.deptcard:active{transform:scale(.98)}
+.deptcard:focus-visible{outline:3px solid var(--cs-brand-text);outline-offset:2px}
+.deptcard h2{margin:0;font-size:21px;font-weight:500}
+.deptcard .ic{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;background:var(--cs-aqua-bg);color:var(--cs-brand-text)}
+.deptcard .ic svg{width:28px;height:28px}
+.syncbar{display:flex;align-items:center;gap:10px;padding:12px 16px;margin-bottom:20px;flex-wrap:wrap;font-size:14px}
+.syncbar .dot{width:9px;height:9px;border-radius:50%;background:#2e9e74;box-shadow:0 0 0 4px #dff3ea;flex:none}
+.syncbar.off .dot{background:#d9892b;box-shadow:0 0 0 4px #fbeacf}
+.dept-pfs #uhNote,.dept-uh #notifyTools,.dept-uh #notifyStatus{display:none}
+.dept-uh #btnGeneratePdfOld{display:none}
+.avatar{font-size:11px}
 </style>
 </head>
 <body>
@@ -904,6 +924,18 @@ td .name{font-weight:600}
   </defs>
 </svg>
 
+<div id="gate">
+  <div class="gate-in">
+    <span class="mark gm">CS</span>
+    <div class="eyebrow">Clean Service · Dispo-Manager</div>
+    <h1>WELCHE ABTEILUNG?</h1>
+    <div class="grid2">
+      <button class="deptcard" data-pick="pfs" type="button"><div class="ic"><svg><use href="#i-home"/></svg></div><h2>Putzfrauenservice</h2></button>
+      <button class="deptcard" data-pick="uh" type="button"><div class="ic"><svg><use href="#i-list"/></svg></div><h2>Unterhaltsreinigung</h2></button>
+    </div>
+  </div>
+</div>
+
 <div class="app">
   <nav class="rail" aria-label="Hauptnavigation">
     <div class="signet"><span class="mark">CS</span></div>
@@ -912,7 +944,8 @@ td .name{font-weight:600}
     <button class="nav-i" data-go="touren"><svg><use href="#i-route"/></svg>Touren</button>
     <button class="nav-i" data-go="pdf"><svg><use href="#i-pdf"/></svg>PDF</button>
     <div class="spacer"></div>
-    <div class="avatar">CG</div>
+    <button class="nav-i" data-switch-dept title="Abteilung wechseln"><svg><use href="#i-home"/></svg>Wechseln</button>
+    <div class="avatar" id="deptAvatar">PFS</div>
   </nav>
   <div class="main">
     <header class="topbar">
@@ -925,7 +958,7 @@ td .name{font-weight:600}
       <div class="phead">
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
-          <div><div class="eyebrow">Putzfrauenservice · Dispo</div><h1 id="dashTitle">HEUTE ZU TUN</h1><p class="sub" id="dashSub">Dateien hochladen, Aufträge prüfen und den Touren zuteilen.</p></div>
+          <div><div class="eyebrow"><span class="dn">Putzfrauenservice</span> · Dispo</div><h1 id="dashTitle">HEUTE ZU TUN</h1><p class="sub" id="dashSub">Dateien hochladen, Aufträge prüfen und den Touren zuteilen.</p></div>
           <div style="display:flex;gap:10px">
             <button class="btn btn-s" id="btnSaveDay" hidden><svg><use href="#i-upload"/></svg>Tagesdispo speichern</button>
             <button class="btn btn-p" id="btnGoList" hidden><svg><use href="#i-list"/></svg>Aufträge ansehen</button>
@@ -933,6 +966,8 @@ td .name{font-weight:600}
         </div>
       </div>
       <div class="content">
+
+        <div class="card syncbar" id="syncBar"></div>
 
         <div class="card" id="savedDaysCard" style="margin-bottom:20px;padding:18px 20px" hidden>
           <div class="card-h" style="padding:0 0 12px"><h2>Gespeicherte Tagesdispositionen</h2></div>
@@ -994,7 +1029,7 @@ td .name{font-weight:600}
       <div class="phead">
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
-          <div><div class="eyebrow">Putzfrauenservice · <span id="listDatum">Dispo</span></div><h1>AUFTRÄGE</h1><p class="sub">Auftrag anklicken, um ihn einer Tour und Uhrzeit zuzuteilen.</p></div>
+          <div><div class="eyebrow"><span class="dn">Putzfrauenservice</span> · <span id="listDatum">Dispo</span></div><h1>AUFTRÄGE</h1><p class="sub">Auftrag anklicken, um ihn einer Tour und Uhrzeit zuzuteilen.</p></div>
         </div>
       </div>
       <div class="content">
@@ -1026,7 +1061,7 @@ td .name{font-weight:600}
       <div class="phead">
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
-          <div><div class="eyebrow">Putzfrauenservice · <span id="tourenDatum">Dispo</span></div><h1>TOUREN</h1><p class="sub">Alle zugeteilten Stopps je Tour, nach Uhrzeit sortiert. Tipp: Tournamen auf eine andere Tour ziehen, um automatisch eine 2er-Tour daraus zu machen.</p></div>
+          <div><div class="eyebrow"><span class="dn">Putzfrauenservice</span> · <span id="tourenDatum">Dispo</span></div><h1>TOUREN</h1><p class="sub">Alle zugeteilten Stopps je Tour, nach Uhrzeit sortiert. Tipp: Tournamen auf eine andere Tour ziehen, um automatisch eine 2er-Tour daraus zu machen.</p></div>
         </div>
       </div>
       <div class="content">
@@ -1066,7 +1101,7 @@ td .name{font-weight:600}
       <div class="phead">
         <svg class="wave" viewBox="0 0 560 140" preserveAspectRatio="none" aria-hidden="true"><path d="M140 140 C230 90 330 120 420 70 C480 38 520 40 560 18 L560 140 Z" fill="#9ad3d3" opacity=".45"/><path d="M280 140 C350 110 430 128 500 92 C530 78 548 76 560 70 L560 140 Z" fill="#2bb6b7" opacity=".28"/></svg>
         <div class="inner">
-          <div><div class="eyebrow">Putzfrauenservice · <span id="pdfDatum">Dispo</span></div><h1>PDF ERSTELLEN</h1><p class="sub">Prüfen, dann die saubere Disposition als PDF erzeugen.</p></div>
+          <div><div class="eyebrow"><span class="dn">Putzfrauenservice</span> · <span id="pdfDatum">Dispo</span></div><h1>PDF ERSTELLEN</h1><p class="sub">Prüfen, dann die saubere Disposition als PDF erzeugen.</p></div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button class="btn btn-p" id="btnGeneratePdf"><svg><use href="#i-pdf"/></svg>PDF erstellen</button>
             <button class="btn btn-s" id="btnGeneratePdfOld" title="Bisherige Ansicht auf der Aduna-Disposition">Aduna-Ansicht (alt)</button>
@@ -1083,10 +1118,12 @@ td .name{font-weight:600}
           <div class="stat-row"><span class="muted">Touren</span><b id="sumTours">0</b></div>
         </div>
         <div class="card" style="padding:16px 18px;margin-top:16px">
-          <div class="card-h" style="padding:0 0 10px"><h2>Kunden-Zeitmitteilung</h2></div>
+          <div class="card-h" style="padding:0 0 10px"><h2 id="notifyCardTitle">Kunden-Zeitmitteilung</h2></div>
           <p class="muted" id="notifyStatus" style="font-size:13.5px;margin:0 0 14px">Noch keine Aufträge zugeteilt.</p>
-          <button class="btn btn-p" id="btnReviewNotify"><svg><use href="#i-pdf"/></svg>Dispo bestätigen &amp; Zeitmitteilung prüfen</button>
-          <div style="border-top:1px solid var(--cs-line);margin-top:16px">
+          <p class="muted" id="uhNote" style="font-size:13.5px;margin:0 0 14px">Die Dispo und alle Auftragsrapporte gehen in den Beekeeper-Chat «Dispo Springer-Team UH». Es wird keine Zeitmitteilung an Kunden versendet.</p>
+          <button class="btn btn-p" id="btnReviewNotify"><svg><use href="#i-pdf"/></svg><span id="btnReviewNotifyTxt">Dispo bestätigen &amp; Zeitmitteilung prüfen</span></button>
+          <div id="bkStatusUH" class="muted" style="font-size:13px;margin-top:12px"></div>
+          <div id="notifyTools" style="border-top:1px solid var(--cs-line);margin-top:16px">
             <div class="cs-switch-row">
               <div>
                 <div style="font-size:13.5px;font-weight:600">Kopie an putzfrauenservice@clean-service.ch</div>
@@ -1185,10 +1222,33 @@ td .name{font-weight:600}
   <button class="dnav" data-go="list"><svg><use href="#i-list"/></svg>Aufträge</button>
   <button class="dnav" data-go="touren"><svg><use href="#i-route"/></svg>Touren</button>
   <button class="dnav" data-go="pdf"><svg><use href="#i-pdf"/></svg>PDF</button>
+  <button class="dnav" data-switch-dept><svg><use href="#i-home"/></svg>Abteilung wechseln</button>
 </nav>
 
 <div class="toast" role="status" aria-live="polite"><div class="ic" id="toastIcon"></div><span id="toastText"></span></div>
 
+<script>
+var DEPT = null;
+(function(){
+  var h = (location.hash||'').replace('#','');
+  if(h==='pfs' || h==='uh') DEPT = h;
+  else { try{ var v = sessionStorage.getItem('cs-dispo-dept'); if(v==='pfs'||v==='uh') DEPT = v; }catch(e){} }
+  document.body.classList.add(DEPT ? 'dept-'+DEPT : 'dept-none');
+  document.querySelectorAll('[data-pick]').forEach(function(b){ b.addEventListener('click', function(){
+    try{ sessionStorage.setItem('cs-dispo-dept', b.dataset.pick); }catch(e){}
+    location.hash = b.dataset.pick; location.reload();
+  }); });
+  document.querySelectorAll('[data-switch-dept]').forEach(function(b){ b.addEventListener('click', function(){
+    try{ sessionStorage.removeItem('cs-dispo-dept'); }catch(e){}
+    history.replaceState(null,'',location.pathname+location.search); location.reload();
+  }); });
+})();
+var KP = DEPT==='uh' ? 'cs-dispo-uh-' : 'cs-dispo-';
+var DEPT_NAME = DEPT==='uh' ? 'Unterhaltsreinigung' : 'Putzfrauenservice';
+document.querySelectorAll('.dn').forEach(function(e){ e.textContent = DEPT_NAME; });
+(function(){ var a=document.getElementById('deptAvatar'); if(a) a.textContent = DEPT==='uh' ? 'UH' : 'PFS';
+  document.title = 'Dispo-Manager ' + (DEPT ? DEPT_NAME : ''); })();
+</script>
 <script>
 /* =====================================================================
    CS_LOTTIE – Clean Service Lottie-Icon-Bibliothek (unverändert aus Skill)
@@ -1722,6 +1782,174 @@ function fixedColorForName(name){
 let listFile = null;      // {name, buf}
 let rappFiles = [];       // [{name, buf}]
 let parsedListRows = [];
+/* =====================================================================
+   CLOUD-SYNC (Supabase): Tagesdispo, Rapporte und Touren je Abteilung
+   werden auf allen PCs gleich gehalten. Ohne Verbindung arbeitet die App
+   lokal weiter und gleicht beim nächsten Mal ab.
+===================================================================== */
+const SB_URL = 'https://fsxqqemnzutnhqxjmugf.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzeHFxZW1uenV0bmhxeGptdWdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NTg4MjcsImV4cCI6MjEwNzUzNDgyN30.Niil4uZUmnm8VV6nVKYfBRM9Blsk-IGeuuRo8VxPOYo';
+let cloudReady = false, cloudOk = true, cloudApplying = false, cloudBusy = false, cloudLastSync = null;
+let cloudPushing = false, cloudPushPending = null, cloudPushTimer = null;
+let cloudToursTimer = null, cloudToursStamp = 0;
+let cloudStamp = {}, cloudRappStamp = {};
+try{ cloudStamp = JSON.parse(localStorage.getItem(KP+'cloud-stamps') || '{}') || {}; }catch(e){ cloudStamp = {}; }
+function cloudSaveStamps(){ try{ localStorage.setItem(KP+'cloud-stamps', JSON.stringify(cloudStamp)); }catch(e){} }
+const cms = v => new Date(v).getTime();
+async function sb(path, opt){
+  opt = opt || {};
+  const r = await fetch(SB_URL + '/rest/v1/' + path, { ...opt, headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type':'application/json', ...(opt.headers||{}) } });
+  if(!r.ok) throw new Error('Cloud HTTP ' + r.status);
+  const t = await r.text(); return t ? JSON.parse(t) : null;
+}
+function cloudSetOk(ok){
+  cloudOk = ok; if(ok) cloudLastSync = new Date();
+  renderSyncBar();
+}
+function renderSyncBar(){
+  const el = document.getElementById('syncBar'); if(!el) return;
+  el.classList.toggle('off', !cloudOk);
+  const t = cloudLastSync ? cloudLastSync.toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+  el.innerHTML = cloudOk
+    ? `<span class="dot"></span><span><b>${DEPT_NAME}</b> · Live synchronisiert auf allen PCs</span><span class="muted" style="margin-left:auto;font-size:13px">${t ? 'Letzter Abgleich ' + t : 'Verbinde …'}</span>`
+    : `<span class="dot"></span><span><b>${DEPT_NAME}</b> · Keine Verbindung – es wird lokal gespeichert und später abgeglichen</span>`;
+}
+function cloudPushDay(datum, data){
+  if(!DEPT || !cloudReady || cloudApplying) return;
+  cloudPushPending = { datum, data };
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(async ()=>{
+    const p = cloudPushPending; cloudPushPending = null; if(!p) return;
+    cloudPushing = true;
+    try{
+      const stamp = cms(p.data.savedAt || Date.now());
+      await sb('dispo_days?on_conflict=dept,datum', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ dept: DEPT, datum: p.datum, state: p.data, updated_at: new Date(stamp).toISOString() }) });
+      cloudStamp[p.datum] = stamp; cloudSaveStamps(); cloudSetOk(true);
+    }catch(e){ console.warn(e); cloudSetOk(false); }
+    finally{ cloudPushing = false; }
+  }, 1200);
+}
+async function cloudPushRapporte(datum){
+  if(!DEPT || !cloudReady || cloudApplying || !rappFiles.length) return;
+  try{
+    const stamp = Date.now();
+    await sb('dispo_rapporte?on_conflict=dept,datum', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ dept: DEPT, datum, files: rappFiles.map(f=>({ name:f.name, base64: arrayBufferToBase64(f.buf) })), src: rapportSrc || {}, updated_at: new Date(stamp).toISOString() }) });
+    cloudRappStamp[datum] = stamp; cloudSetOk(true);
+  }catch(e){ console.warn(e); cloudSetOk(false); }
+}
+async function cloudPullRapporte(datum){
+  const rows = await sb(`dispo_rapporte?dept=eq.${DEPT}&datum=eq.${encodeURIComponent(datum)}&select=files,src,updated_at`);
+  if(!rows || !rows[0] || !rows[0].files || !rows[0].files.length) return false;
+  rappFiles = rows[0].files.map(f=>({ name:f.name, buf: base64ToArrayBuffer(f.base64) }));
+  rapportSrc = rows[0].src || {}; rappDatum = datum;
+  cloudRappStamp[datum] = cms(rows[0].updated_at);
+  await saveRapporteStore(datum, { noCloud:true });
+  return true;
+}
+async function cloudDeleteDay(datum){
+  if(!DEPT) return;
+  delete cloudStamp[datum]; cloudSaveStamps();
+  try{
+    await sb(`dispo_days?dept=eq.${DEPT}&datum=eq.${encodeURIComponent(datum)}`, { method:'DELETE', headers:{ Prefer:'return=minimal' } });
+    await sb(`dispo_rapporte?dept=eq.${DEPT}&datum=eq.${encodeURIComponent(datum)}`, { method:'DELETE', headers:{ Prefer:'return=minimal' } });
+  }catch(e){ console.warn(e); }
+}
+function cloudPushTours(){
+  if(!DEPT || !cloudReady || cloudApplying) return;
+  clearTimeout(cloudToursTimer);
+  cloudToursTimer = setTimeout(async ()=>{
+    try{
+      const stamp = Date.now();
+      await sb('dispo_settings?on_conflict=dept,key', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ dept: DEPT, key:'tours', value: tours, updated_at: new Date(stamp).toISOString() }) });
+      cloudToursStamp = stamp; cloudSetOk(true);
+    }catch(e){ console.warn(e); cloudSetOk(false); }
+    cloudToursTimer = null;
+  }, 800);
+}
+async function cloudPullDay(datum, st){
+  const rows = await sb(`dispo_days?dept=eq.${DEPT}&datum=eq.${encodeURIComponent(datum)}&select=state,updated_at`);
+  if(!rows || !rows[0]) return;
+  try{ localStorage.setItem(dayKey(datum), JSON.stringify(rows[0].state)); }catch(e){}
+  cloudStamp[datum] = st; cloudSaveStamps();
+  if(datum === targetDatum && !dayDirty){
+    cloudApplying = true;
+    try{ loadDayState(datum, true); }finally{ cloudApplying = false; }
+    try{ await cloudPullRapporte(datum); }catch(e){}
+  } else renderSavedDays();
+}
+async function cloudPoll(){
+  if(!DEPT || cloudBusy || document.hidden) return;
+  cloudBusy = true;
+  try{
+    const days = await sb(`dispo_days?dept=eq.${DEPT}&select=datum,updated_at`) || [];
+    const seen = new Set();
+    for(const r of days){
+      seen.add(r.datum);
+      const st = cms(r.updated_at);
+      if(cloudStamp[r.datum] === st) continue;
+      if(cloudPushing || (cloudPushPending && cloudPushPending.datum === r.datum)) continue;
+      if(r.datum === targetDatum && dayDirty) continue;
+      await cloudPullDay(r.datum, st);
+    }
+    for(const d of listSavedDays()){
+      if(seen.has(d.targetDatum)) continue;
+      if(cloudStamp[d.targetDatum]){
+        // wurde auf einem anderen PC gelöscht
+        if(d.targetDatum !== targetDatum && !(cloudPushPending && cloudPushPending.datum === d.targetDatum)){
+          try{ localStorage.removeItem(dayKey(d.targetDatum)); }catch(e){}
+          delete cloudStamp[d.targetDatum]; cloudSaveStamps(); renderSavedDays();
+        }
+      } else if(cloudReady){
+        cloudPushDay(d.targetDatum, d);
+      } else {
+        // erster Abgleich: bisher nur lokal gespeicherte Tage hochladen
+        try{
+          const stamp = cms(d.savedAt || Date.now());
+          await sb('dispo_days?on_conflict=dept,datum', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify({ dept: DEPT, datum: d.targetDatum, state: d, updated_at: new Date(stamp).toISOString() }) });
+          cloudStamp[d.targetDatum] = stamp; cloudSaveStamps();
+        }catch(e){ console.warn(e); }
+      }
+    }
+    // Touren (gemeinsam je Abteilung)
+    const tr = await sb(`dispo_settings?dept=eq.${DEPT}&key=eq.tours&select=value,updated_at`) || [];
+    if(!tr.length){
+      if(tours.length){
+        const stamp = Date.now();
+        await sb('dispo_settings?on_conflict=dept,key', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ dept: DEPT, key:'tours', value: tours, updated_at: new Date(stamp).toISOString() }) });
+        cloudToursStamp = stamp;
+      }
+    } else {
+      const st = cms(tr[0].updated_at);
+      if(st !== cloudToursStamp && !cloudToursTimer && Array.isArray(tr[0].value)){
+        tours = tr[0].value; cloudToursStamp = st;
+        try{ localStorage.setItem(KP+'tours', JSON.stringify(tours)); }catch(e){}
+        cloudApplying = true; try{ renderAll(); }catch(e){} finally{ cloudApplying = false; }
+      }
+    }
+    // Rapporte des geladenen Tages
+    if(targetDatum){
+      const rr = await sb(`dispo_rapporte?dept=eq.${DEPT}&datum=eq.${encodeURIComponent(targetDatum)}&select=updated_at`) || [];
+      if(rr.length){ if(cloudRappStamp[targetDatum] !== cms(rr[0].updated_at)){ await cloudPullRapporte(targetDatum); } }
+      else if(rappFiles.length && rappDatum === targetDatum && cloudReady){ cloudPushRapporte(targetDatum); }
+    }
+    cloudReady = true;
+    cloudSetOk(true);
+  }catch(e){ console.warn(e); cloudSetOk(false); }
+  finally{ cloudBusy = false; }
+}
+function cloudInit(){
+  if(!DEPT) return;
+  renderSyncBar();
+  cloudPoll();
+  setInterval(cloudPoll, 5000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) cloudPoll(); });
+}
+
 let targetDatum = null;
 let orders = [];          // aktive Aufträge (ohne Abwesenheiten)
 let absenceOrders = [];
@@ -1734,17 +1962,18 @@ let selectedAuftragNr = null;
 
 function loadTours(){
   try{
-    const raw = localStorage.getItem('cs-dispo-tours');
+    const raw = localStorage.getItem(KP+'tours');
     if(raw) tours = JSON.parse(raw);
   }catch(e){ tours = []; }
 }
 function saveTours(){
-  try{ localStorage.setItem('cs-dispo-tours', JSON.stringify(tours)); }catch(e){}
+  try{ localStorage.setItem(KP+'tours', JSON.stringify(tours)); }catch(e){}
   try{ scheduleDaySave(); }catch(e){}
+  try{ cloudPushTours(); }catch(e){}
 }
 loadTours();
 function seedDefaultToursIfEmpty(){
-  if(tours.length>0) return;
+  if(tours.length>0 || DEPT==='uh') return;
   tours = SPRINGERTEAM.map(m=>({ id: uid(), name: m.name, teamSize: 1, color: m.color }));
   saveTours();
 }
@@ -1800,7 +2029,7 @@ function mergeTours(sourceId, targetId){
    verschoben, Auftrag nachträglich verteilt) jederzeit wieder aufgenommen
    werden können – auch nach dem Schliessen des Browsers.
 ===================================================================== */
-const DAY_PREFIX = 'cs-dispo-day-';
+const DAY_PREFIX = KP + 'day-';
 let dayDirty = false;
 let dayDirtyTimer = null;
 
@@ -1835,8 +2064,9 @@ function rappDb(){
     }catch(e){ rej(e); }
   });
 }
-const RAPP_LS = 'cs-dispo-rapp-';
-async function saveRapporteStore(datum){
+const RAPP_LS = KP + 'rapp-';
+function rk(datum){ return DEPT==='uh' ? 'uh:'+datum : datum; }
+async function saveRapporteStore(datum, opt){
   if(!datum || !rappFiles.length) return false;
   rappDatum = datum;
   let ok = false;
@@ -1844,7 +2074,7 @@ async function saveRapporteStore(datum){
     const db = await rappDb();
     await new Promise((res,rej)=>{
       const tx = db.transaction('tage','readwrite');
-      tx.objectStore('tage').put({ files: rappFiles.map(f=>({name:f.name, buf:f.buf})), src: rapportSrc, savedAt: Date.now() }, datum);
+      tx.objectStore('tage').put({ files: rappFiles.map(f=>({name:f.name, buf:f.buf})), src: rapportSrc, savedAt: Date.now() }, rk(datum));
       tx.oncomplete = res; tx.onerror = ()=>rej(tx.error); tx.onabort = ()=>rej(tx.error);
     });
     db.close(); ok = true;
@@ -1859,6 +2089,7 @@ async function saveRapporteStore(datum){
   }
   if(!ok) toast('Rapporte konnten im Browser nicht gespeichert werden – Download nur bis zum Neuladen möglich', 'warning');
   updateRappStatus();
+  if(ok && !(opt && opt.noCloud)){ try{ cloudPushRapporte(datum); }catch(e){} }
   return ok;
 }
 async function loadRapporteStore(datum){
@@ -1867,7 +2098,7 @@ async function loadRapporteStore(datum){
   try{
     const db = await rappDb();
     const val = await new Promise((res,rej)=>{
-      const rq = db.transaction('tage').objectStore('tage').get(datum);
+      const rq = db.transaction('tage').objectStore('tage').get(rk(datum));
       rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>rej(rq.error);
     });
     db.close();
@@ -1879,6 +2110,7 @@ async function loadRapporteStore(datum){
       if(raw){ const v = JSON.parse(raw); rappFiles = v.files.map(f=>({name:f.name, buf:base64ToArrayBuffer(f.base64)})); rapportSrc = v.src || {}; rappDatum = datum; }
     }catch(e){ console.warn('Rapporte: localStorage nicht lesbar', e); }
   }
+  if(!rappFiles.length && DEPT){ try{ await cloudPullRapporte(datum); }catch(e){} }
   updateRappStatus();
   return rappFiles.length>0;
 }
@@ -1893,7 +2125,7 @@ async function deleteRapporteStore(datum){
   try{ localStorage.removeItem(RAPP_LS+datum); }catch(e){}
   try{
     const db = await rappDb();
-    await new Promise((res)=>{ const tx = db.transaction('tage','readwrite'); tx.objectStore('tage').delete(datum); tx.oncomplete = res; tx.onerror = res; });
+    await new Promise((res)=>{ const tx = db.transaction('tage','readwrite'); tx.objectStore('tage').delete(rk(datum)); tx.oncomplete = res; tx.onerror = res; });
     db.close();
   }catch(e){}
 }
@@ -1917,6 +2149,7 @@ function saveDayState(silent){
     };
     localStorage.setItem(dayKey(targetDatum), JSON.stringify(data));
     dayDirty = false;
+    try{ cloudPushDay(targetDatum, data); }catch(e){}
     if(rappFiles.length && rappDatum!==targetDatum) saveRapporteStore(targetDatum);
     if(!silent) toast('Tagesdispo gespeichert', 'check');
     renderSavedDays();
@@ -1928,6 +2161,7 @@ function saveDayState(silent){
   }
 }
 function scheduleDaySave(){
+  if(cloudApplying) return;
   if(!targetDatum || !listFile || orders.length===0) return;
   dayDirty = true;
   clearTimeout(dayDirtyTimer);
@@ -1948,7 +2182,7 @@ function listSavedDays(){
   return days;
 }
 
-function loadDayState(datum){
+function loadDayState(datum, silent){
   let raw = null;
   try{ raw = localStorage.getItem(dayKey(datum)); }catch(e){}
   if(!raw) return;
@@ -1990,11 +2224,12 @@ function loadDayState(datum){
     ['listDatum','tourenDatum','pdfDatum'].forEach(id=> document.getElementById(id).textContent = targetDatum || 'Dispo');
     renderAll();
     loadRapporteStore(data.targetDatum).then(ok=>{
-      toast(ok ? 'Tagesdispo geladen – Rapporte wieder verfügbar' : 'Tagesdispo geladen – Anpassungen möglich', 'check');
+      if(!silent) toast(ok ? 'Tagesdispo geladen – Rapporte wieder verfügbar' : 'Tagesdispo geladen – Anpassungen möglich', 'check');
     });
   }catch(e){ console.error(e); toast('Laden fehlgeschlagen', 'error'); }
 }
 function deleteDayState(datum){
+  try{ cloudDeleteDay(datum); }catch(e){}
   try{ localStorage.removeItem(dayKey(datum)); }catch(e){}
   deleteRapporteStore(datum);
   renderSavedDays();
@@ -2893,7 +3128,7 @@ async function generateTourDispoPdf(opts){
   pages.forEach((pg,i)=>{
     const lbl = `Seite ${i+1} von ${pages.length}`;
     pg.drawText(lbl, { x:R - reg.widthOfTextAtSize(lbl, 8.5), y:30, size:8.5, font:reg, color:GREY });
-    pg.drawText('Clean Service Scaramuzzo AG · Putzfrauenservice', { x:L, y:30, size:8.5, font:reg, color:GREY });
+    pg.drawText('Clean Service Scaramuzzo AG · ' + DEPT_NAME, { x:L, y:30, size:8.5, font:reg, color:GREY });
   });
 
   const bytes = await doc.save();
@@ -3231,7 +3466,7 @@ function buildTimeNotificationEmail(o){
    eine andere Tour/Uhrzeit bekommen haben (oder noch nie benachrichtigt wurden). */
 /* Admin-Einstellung: Kopie jeder Zeitmitteilung intern an putzfrauenservice@
    clean-service.ch mitsenden - persistiert lokal, Standard an. */
-const CC_PFS_KEY = 'cs-dispo-cc-pfs';
+const CC_PFS_KEY = KP + 'cc-pfs';
 const CC_PFS_ADDRESS = 'putzfrauenservice@clean-service.ch';
 function ccPfsEnabled(){
   try{ const v = localStorage.getItem(CC_PFS_KEY); return v===null ? true : v==='1'; }catch(e){ return true; }
@@ -3247,7 +3482,7 @@ function ccPfsEnabled(){
 /* Admin-Einstellung: Schlüssellieferungen, Materiallieferungen und Einführungen PFS bekommen keine
    Zeitmitteilung (es gibt dabei keinen eigentlichen Reinigungstermin beim
    Kunden mitzuteilen) - lässt sich im Adminbereich ein-/ausschalten, Standard an. */
-const EXCLUDE_TYPES_KEY = 'cs-dispo-exclude-types';
+const EXCLUDE_TYPES_KEY = KP + 'exclude-types';
 function excludeTypesEnabled(){
   try{ const v = localStorage.getItem(EXCLUDE_TYPES_KEY); return v===null ? true : v==='1'; }catch(e){ return true; }
 }
@@ -3266,8 +3501,8 @@ function isNotifyExcludedType(o){
 
 
 /* ===== Beekeeper: Dispo + Auftragsrapporte in den Gruppenchat ===== */
-const BK_KEY = 'cs-dispo-beekeeper';
-function bkEnabled(){ try{ const v = localStorage.getItem(BK_KEY); return v===null ? false : v==='1'; }catch(e){ return false; } }
+const BK_KEY = KP + 'beekeeper';
+function bkEnabled(){ if(DEPT==='uh') return true; try{ const v = localStorage.getItem(BK_KEY); return v===null ? false : v==='1'; }catch(e){ return false; } }
 (function initBkToggle(){
   const el = document.getElementById('bkToggle'); if(!el) return;
   el.checked = bkEnabled();
@@ -3279,12 +3514,12 @@ function bytesToBase64(bytes){
   return btoa(bin);
 }
 async function bkCall(payload){
-  const r = await fetch('/api/send-beekeeper', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  const r = await fetch('/api/send-beekeeper', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dept: DEPT, ...payload }) });
   let j = {}; try{ j = await r.json(); }catch(e){}
   if(!r.ok) throw new Error(j.error || ('HTTP '+r.status));
   return j;
 }
-function bkSetStatus(html){ const el = document.getElementById('bkStatus'); if(el) el.innerHTML = html; }
+function bkSetStatus(html){ ['bkStatus','bkStatusUH'].forEach(id=>{ const el = document.getElementById(id); if(el) el.innerHTML = html; }); }
 let bkBusy = false;
 async function sendDispoToBeekeeper(){
   if(bkBusy) return; bkBusy = true;
@@ -3324,7 +3559,19 @@ async function sendDispoToBeekeeper(){
     console.error(err);
     bkSetStatus(`<span style="color:#b84a3e;font-weight:600">✗ Beekeeper-Versand fehlgeschlagen:</span> ${String(err.message||err)} <button type="button" class="btn btn-s" id="bkRetry" style="padding:3px 10px;font-size:12px;margin-left:8px">Erneut senden</button>`);
     const b = document.getElementById('bkRetry'); if(b) b.addEventListener('click', ()=> sendDispoToBeekeeper());
-  }finally{ bkBusy = false; }
+  }finally{ bkBusy = false; try{ updateDeptUi(); }catch(e){} }
+}
+
+function updateDeptUi(){
+  if(DEPT!=='uh') return;
+  const t = document.getElementById('btnReviewNotifyTxt'); if(t) t.textContent = bkSentAt ? 'Angepasste Dispo bestätigen' : 'Dispo bestätigen';
+  const h = document.getElementById('notifyCardTitle'); if(h) h.textContent = 'Dispo bestätigen';
+}
+function uhConfirm(){
+  if(orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
+  const open = orders.filter(o=>!o.assignedTourId).length;
+  if(open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
+  sendDispoToBeekeeper();
 }
 
 function pendingNotifications(){
@@ -3463,6 +3710,7 @@ function retryAllFailed(){
 }
 
 document.getElementById('btnReviewNotify').addEventListener('click', ()=>{
+  if(DEPT==='uh'){ uhConfirm(); return; }
   notifyBatch = null;
   renderNotifyList();
   document.getElementById('notifyModal').classList.add('open');
@@ -3810,10 +4058,13 @@ function renderAll(){
   renderTouren();
   renderPdfView();
   renderSavedDays();
+  try{ updateDeptUi(); }catch(e){}
   scheduleDaySave();
 }
 renderSavedDays();
 renderAll();
+updateDeptUi();
+cloudInit();
 </script>
 </body>
 </html>
