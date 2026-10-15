@@ -59,6 +59,13 @@ async function listAllChats(ctx){
 async function findChat(ctx){
   if(ctx.chatId) return { id: ctx.chatId, base: CHAT_BASE };
   const want = ctx.chatName.trim().toLowerCase();
+  // Die Chat-Liste ist bei Beekeeper auf 200 Einträge begrenzt -> gezielt per Suchbegriff (q) suchen
+  const sr = await withAuth(ctx, `${CHAT_BASE}?q=${encodeURIComponent(ctx.chatName)}`);
+  if(sr.ok){
+    const hits = chatList(sr.json);
+    const exact = hits.find(c=> String(c.title||c.name||'').trim().toLowerCase() === want);
+    if(exact) return { id: exact.id, base: CHAT_BASE };
+  }
   const { all } = await listAllChats(ctx);
   let loose = null;
   for(const c of all){
@@ -91,27 +98,6 @@ module.exports = async (req, res) => {
     const out = { dept: req.query.dept || 'pfs', tokenGesetzt: !!c.token, chatName: c.chatName };
     if(c.token){
       const la = await listAllChats(c); out.anzahlChats = la.all.length; out.seiten = la.meta.pages; out.antwortFelder = la.meta.keys;
-      out.dispoChats = la.all.map(x=>String(x.title||x.name||'')).filter(t=>/dispo/i.test(t));
-      if(req.query.probe){
-        const base = await withAuth(c, CHAT_BASE); const bl = chatList(base.json);
-        out.chatFelder = bl[0] ? Object.keys(bl[0]) : [];
-        out.typen = {}; bl.forEach(x=>{ const k = String(x.type||x.chat_type||'-'); out.typen[k] = (out.typen[k]||0)+1; });
-        out.varianten = {};
-        for(const q of ['?limit=1000','?offset=200','?page=2','?cursor=200','?per_page=500','?limit=500&offset=0']){
-          const r = await withAuth(c, CHAT_BASE + q); const l = chatList(r.json);
-          out.varianten[q] = { status:r.status, n:l.length, neu: l.filter(x=>!bl.some(y=>y.id===x.id)).length };
-        }
-        out.aehnlich = bl.map(x=>String(x.title||'')).filter(t=>/pfs|springer|dispo/i.test(t));
-        out.sortierung = [bl[0] && bl[0].updated_at, bl[bl.length-1] && bl[bl.length-1].updated_at];
-        out.suche = {};
-        const qn = encodeURIComponent(c.chatName);
-        for(const q of ['?title='+qn,'?search='+qn,'?q='+qn,'?query='+qn,'?name='+qn,'?filter[title]='+qn]){
-          const r = await withAuth(c, CHAT_BASE + q); const l = chatList(r.json);
-          out.suche[q.split('=')[0]] = { status:r.status, n:l.length, titel: l.slice(0,3).map(x=>String(x.title||'')) };
-        }
-        const mm = await withAuth(c, '/api/2/users/me'); out.rolle = mm.json && (mm.json.name || '').slice(0,40);
-        const m = await withAuth(c, '/api/2/users/me'); out.ich = m.json ? Object.keys(m.json).slice(0,12) : m.status;
-      }
       const chat = await findChat(c).catch(()=>null);
       out.chatGefunden = !!chat; if(chat) out.chatId = chat.id;
     }
