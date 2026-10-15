@@ -101,6 +101,15 @@ module.exports = async (req, res) => {
           const r = await withAuth(c, CHAT_BASE + q); const l = chatList(r.json);
           out.varianten[q] = { status:r.status, n:l.length, neu: l.filter(x=>!bl.some(y=>y.id===x.id)).length };
         }
+        out.aehnlich = bl.map(x=>String(x.title||'')).filter(t=>/pfs|springer|dispo/i.test(t));
+        out.sortierung = [bl[0] && bl[0].updated_at, bl[bl.length-1] && bl[bl.length-1].updated_at];
+        out.suche = {};
+        const qn = encodeURIComponent(c.chatName);
+        for(const q of ['?title='+qn,'?search='+qn,'?q='+qn,'?query='+qn,'?name='+qn,'?filter[title]='+qn]){
+          const r = await withAuth(c, CHAT_BASE + q); const l = chatList(r.json);
+          out.suche[q.split('=')[0]] = { status:r.status, n:l.length, titel: l.slice(0,3).map(x=>String(x.title||'')) };
+        }
+        const mm = await withAuth(c, '/api/2/users/me'); out.rolle = mm.json && (mm.json.name || '').slice(0,40);
         const m = await withAuth(c, '/api/2/users/me'); out.ich = m.json ? Object.keys(m.json).slice(0,12) : m.status;
       }
       const chat = await findChat(c).catch(()=>null);
