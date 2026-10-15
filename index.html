@@ -3502,7 +3502,7 @@ function isNotifyExcludedType(o){
 
 /* ===== Beekeeper: Dispo + Auftragsrapporte in den Gruppenchat ===== */
 const BK_KEY = KP + 'beekeeper';
-function bkEnabled(){ if(DEPT==='uh') return true; try{ const v = localStorage.getItem(BK_KEY); return v===null ? false : v==='1'; }catch(e){ return false; } }
+function bkEnabled(){ if(DEPT==='uh') return true; try{ const v = localStorage.getItem(BK_KEY); return v===null ? true : v==='1'; }catch(e){ return true; } }
 (function initBkToggle(){
   const el = document.getElementById('bkToggle'); if(!el) return;
   el.checked = bkEnabled();
