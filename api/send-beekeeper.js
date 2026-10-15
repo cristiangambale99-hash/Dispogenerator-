@@ -112,7 +112,7 @@ module.exports = async (req, res) => {
     if(body.action==='diag'){
       const out = {};
       for(const p of [CHAT_BASE + '?limit=5','/api/2/users/me']){
-        const r = await withAuth(ctx, p); out[p] = { status:r.status, sample:r.text.slice(0,200) };
+        const r = await withAuth(ctx, p); out[p] = { status:r.status };
       }
       const chat = await findChat(ctx);
       res.status(200).json({ ok:true, chat, probes:out }); return;
