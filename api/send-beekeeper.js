@@ -33,20 +33,38 @@ function chatList(j){
   return Array.isArray(arr) ? arr : [];
 }
 const CHAT_BASE = '/api/2/chats/groups';
+async function listAllChats(ctx){
+  const all = []; const seen = new Set(); const meta = { keys: [], pages: 0 };
+  let url = CHAT_BASE; let guard = 0;
+  while(url && guard++ < 30){
+    const r = await withAuth(ctx, url);
+    if(!r.ok) break;
+    meta.pages++;
+    if(r.json && !Array.isArray(r.json) && !meta.keys.length) meta.keys = Object.keys(r.json);
+    const list = chatList(r.json);
+    let fresh = 0;
+    for(const c of list){ if(c && c.id && !seen.has(c.id)){ seen.add(c.id); all.push(c); fresh++; } }
+    // Seitenwechsel: next-Link/Cursor, sonst offset
+    const j = r.json || {};
+    const nxt = j.next || j.next_page || (j.paging && j.paging.next) || (j.pagination && j.pagination.next);
+    const cur = j.next_cursor || j.cursor || (j.paging && j.paging.cursor) || (j.pagination && j.pagination.cursor);
+    if(typeof nxt === 'string' && nxt){ url = nxt.replace(/^https?:\/\/[^/]+/, ''); }
+    else if(cur){ url = `${CHAT_BASE}?cursor=${encodeURIComponent(cur)}`; }
+    else if(fresh > 0 && list.length >= 20){ url = `${CHAT_BASE}?offset=${all.length}&limit=${list.length}`; }
+    else url = null;
+    if(fresh === 0) url = null;
+  }
+  return { all, meta };
+}
 async function findChat(ctx){
   if(ctx.chatId) return { id: ctx.chatId, base: CHAT_BASE };
   const want = ctx.chatName.trim().toLowerCase();
+  const { all } = await listAllChats(ctx);
   let loose = null;
-  for(const q of ['', '?limit=100']){
-    const r = await withAuth(ctx, CHAT_BASE + q);
-    if(!r.ok) continue;
-    const list = chatList(r.json);
-    for(const c of list){
-      const t = String(c.title||c.name||c.subject||'').trim().toLowerCase();
-      if(t === want) return { id: c.id, base: CHAT_BASE };
-      if(!loose && t && (t.includes(want) || want.includes(t))) loose = { id: c.id, base: CHAT_BASE };
-    }
-    if(list.length) break;
+  for(const c of all){
+    const t = String(c.title||c.name||c.subject||'').trim().toLowerCase();
+    if(t === want) return { id: c.id, base: CHAT_BASE };
+    if(!loose && t && (t.includes(want) || want.includes(t))) loose = { id: c.id, base: CHAT_BASE };
   }
   if(loose) return loose;
   if(ctx.hintId) return { id: ctx.hintId, base: CHAT_BASE };
@@ -72,7 +90,8 @@ module.exports = async (req, res) => {
     const c = ctxFor(req.query.dept);
     const out = { dept: req.query.dept || 'pfs', tokenGesetzt: !!c.token, chatName: c.chatName };
     if(c.token){
-      const lr = await withAuth(c, CHAT_BASE); out.chatListeStatus = lr.status; out.anzahlChats = chatList(lr.json).length;
+      const la = await listAllChats(c); out.anzahlChats = la.all.length; out.seiten = la.meta.pages; out.antwortFelder = la.meta.keys;
+      out.dispoChats = la.all.map(x=>String(x.title||x.name||'')).filter(t=>/dispo/i.test(t));
       const chat = await findChat(c).catch(()=>null);
       out.chatGefunden = !!chat; if(chat) out.chatId = chat.id;
     }
