@@ -29,23 +29,41 @@ async function withAuth(ctx, path, opts){
 }
 function chatList(j){
   if(!j) return [];
-  const arr = Array.isArray(j) ? j : (j.conversations || j.chats || j.items || j.data || []);
+  const arr = Array.isArray(j) ? j : (j.chats || j.groups || j.items || j.data || j.conversations || []);
   return Array.isArray(arr) ? arr : [];
 }
+const CHAT_BASE = '/api/2/chats/groups';
 async function findChat(ctx){
-  if(ctx.chatId) return { id: ctx.chatId, base:'/api/2/conversations' };
-  for(const base of ['/api/2/conversations','/api/2/chats']){
-    for(let page=0; page<5; page++){
-      const r = await withAuth(ctx, `${base}?limit=100&offset=${page*100}`);
-      if(!r.ok) break;
-      const list = chatList(r.json);
-      const hit = list.find(c=> String(c.name||c.title||c.subject||'').trim().toLowerCase() === ctx.chatName.toLowerCase());
-      if(hit) return { id: hit.id || hit.conversation_id, base };
-      if(list.length<100) break;
+  if(ctx.chatId) return { id: ctx.chatId, base: CHAT_BASE };
+  const want = ctx.chatName.trim().toLowerCase();
+  let loose = null;
+  for(const q of ['', '?limit=100']){
+    const r = await withAuth(ctx, CHAT_BASE + q);
+    if(!r.ok) continue;
+    const list = chatList(r.json);
+    for(const c of list){
+      const t = String(c.title||c.name||c.subject||'').trim().toLowerCase();
+      if(t === want) return { id: c.id, base: CHAT_BASE };
+      if(!loose && t && (t.includes(want) || want.includes(t))) loose = { id: c.id, base: CHAT_BASE };
     }
+    if(list.length) break;
   }
-  if(ctx.hintId) return { id: ctx.hintId, base:'/api/2/conversations' };
+  if(loose) return loose;
+  if(ctx.hintId) return { id: ctx.hintId, base: CHAT_BASE };
   return null;
+}
+async function uploadFile(ctx, name, buf){
+  const tries = ['/api/2/files/attachment_file/upload', '/api/2/files/chat_attachment/upload', '/api/2/files'];
+  let last = null;
+  for(const p of tries){
+    const fd = new FormData();
+    if(p === '/api/2/files') fd.append('usage_type', 'attachment_file');
+    fd.append('file', new Blob([buf], { type:'application/pdf' }), name);
+    const r = await withAuth(ctx, p, { method:'POST', body: fd });
+    if(r.ok) return { ok:true, file:r.json };
+    last = r;
+  }
+  return { ok:false, last };
 }
 
 module.exports = async (req, res) => {
@@ -54,9 +72,7 @@ module.exports = async (req, res) => {
     const c = ctxFor(req.query.dept);
     const out = { dept: req.query.dept || 'pfs', tokenGesetzt: !!c.token, chatName: c.chatName };
     if(c.token){
-      for(const p of ['/api/2/conversations?limit=1','/api/2/chats?limit=1','/api/2/users/me']){
-        const r = await withAuth(c, p); out[p] = r.status;
-      }
+      const lr = await withAuth(c, CHAT_BASE); out.chatListeStatus = lr.status; out.anzahlChats = chatList(lr.json).length;
       const chat = await findChat(c).catch(()=>null);
       out.chatGefunden = !!chat; if(chat) out.chatId = chat.id;
     }
@@ -70,7 +86,7 @@ module.exports = async (req, res) => {
   try{
     if(body.action==='diag'){
       const out = {};
-      for(const p of ['/api/2/conversations?limit=5','/api/2/chats?limit=5','/api/2/users/me']){
+      for(const p of [CHAT_BASE + '?limit=5','/api/2/users/me']){
         const r = await withAuth(ctx, p); out[p] = { status:r.status, sample:r.text.slice(0,200) };
       }
       const chat = await findChat(ctx);
@@ -78,29 +94,29 @@ module.exports = async (req, res) => {
     }
     if(body.action==='upload'){
       if(!body.name || !body.base64){ res.status(400).json({ error:'name/base64 fehlt' }); return; }
-      const buf = Buffer.from(body.base64, 'base64');
-      const fd = new FormData();
-      fd.append('usage_type', 'attachment_file');
-      fd.append('file', new Blob([buf], { type:'application/pdf' }), body.name);
-      const r = await withAuth(ctx, '/api/2/files', { method:'POST', body: fd });
-      if(!r.ok){ res.status(502).json({ error:`Upload fehlgeschlagen (HTTP ${r.status})`, detail:r.text }); return; }
-      res.status(200).json({ ok:true, file: r.json }); return;
+      const up = await uploadFile(ctx, body.name, Buffer.from(body.base64, 'base64'));
+      if(!up.ok){ res.status(502).json({ error:`Upload fehlgeschlagen (HTTP ${up.last && up.last.status})`, detail: up.last && up.last.text }); return; }
+      res.status(200).json({ ok:true, file: up.file }); return;
     }
     if(body.action==='message'){
       const chat = await findChat(ctx);
       if(!chat){ res.status(502).json({ error:`Chat «${ctx.chatName}» wurde nicht gefunden. Token-Rechte bzw. Chat-ID in Vercel prüfen.` }); return; }
       const files = Array.isArray(body.files) ? body.files.filter(Boolean) : [];
-      const payload = { text: body.text, body: body.text, message: body.text };
-      if(files.length){ payload.files = files; payload.attachments = files; }
-      const paths = [`${chat.base}/${chat.id}/messages`, `/api/2/messages`];
-      let last = null;
-      for(const p of paths){
-        const data = p==='/api/2/messages' ? { ...payload, conversation_id: chat.id } : payload;
-        const r = await withAuth(ctx, p, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(data) });
-        if(r.ok){ res.status(200).json({ ok:true, result:r.json }); return; }
-        last = r;
+      const post = async (data)=>{
+        const r = await withAuth(ctx, `${chat.base}/${chat.id}/messages`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(data) });
+        return r;
+      };
+      // 1. Nachricht: Text (mit @all) + erster Anhang; danach je ein weiterer Anhang pro Nachricht
+      let first = { body: body.text };
+      if(files[0]) first.attachment = files[0];
+      let r = await post({ ...first, mentions:['all'] });
+      if(!r.ok && r.status===400) r = await post(first);
+      if(!r.ok){ res.status(502).json({ error:`Senden fehlgeschlagen (HTTP ${r.status})`, detail:r.text }); return; }
+      for(let i=1;i<files.length;i++){
+        const rr = await post({ attachment: files[i] });
+        if(!rr.ok){ res.status(502).json({ error:`Anhang ${i+1} konnte nicht gesendet werden (HTTP ${rr.status})`, detail:rr.text }); return; }
       }
-      res.status(502).json({ error:`Senden fehlgeschlagen (HTTP ${last && last.status})`, detail: last && last.text }); return;
+      res.status(200).json({ ok:true, result:r.json }); return;
     }
     res.status(400).json({ error:'Unbekannte Aktion' });
   }catch(e){
