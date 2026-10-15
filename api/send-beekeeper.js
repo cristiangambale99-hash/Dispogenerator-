@@ -49,6 +49,19 @@ async function findChat(ctx){
 }
 
 module.exports = async (req, res) => {
+  if(req.method === 'GET' && req.query && req.query.diag){
+    // Verbindungstest ohne Geheimnisse: nur Statuscodes + gefundener Chat
+    const c = ctxFor(req.query.dept);
+    const out = { dept: req.query.dept || 'pfs', tokenGesetzt: !!c.token, chatName: c.chatName };
+    if(c.token){
+      for(const p of ['/api/2/conversations?limit=1','/api/2/chats?limit=1','/api/2/users/me']){
+        const r = await withAuth(c, p); out[p] = r.status;
+      }
+      const chat = await findChat(c).catch(()=>null);
+      out.chatGefunden = !!chat; if(chat) out.chatId = chat.id;
+    }
+    res.status(200).json(out); return;
+  }
   if(req.method !== 'POST'){ res.status(405).json({ error:'Method not allowed' }); return; }
   let body = req.body; if(typeof body==='string'){ try{ body = JSON.parse(body); }catch(e){ res.status(400).json({ error:'Ungültiges JSON' }); return; } }
   body = body || {};
