@@ -98,6 +98,7 @@ module.exports = async (req, res) => {
     const out = { dept: req.query.dept || 'pfs', tokenGesetzt: !!c.token, chatName: c.chatName };
     if(c.token){
       const la = await listAllChats(c); out.anzahlChats = la.all.length; out.seiten = la.meta.pages; out.antwortFelder = la.meta.keys;
+      const me = await withAuth(c, '/api/2/users/me'); out.botName = me.json && String(me.json.name||'').slice(0,60);
       const chat = await findChat(c).catch(()=>null);
       out.chatGefunden = !!chat; if(chat) out.chatId = chat.id;
     }
