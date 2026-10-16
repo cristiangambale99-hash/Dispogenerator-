@@ -1716,6 +1716,8 @@ function suggestedEmployee(order, tours){
 }
 
 /* Std.-Dauer nach Geschäftsregeln: 2er-Team halbiert die Vor-Ort-Zeit, Einführung immer 30 Min. flat. */
+/* Wirksame Teamgrösse: 2er-Tour ODER Tour mit eingetragener Probedame -> Stunden werden wie bei 2er-Teams aufgeteilt */
+function effTeam(t){ return (t && (t.teamSize>1 || probes[t.id])) ? 2 : 1; }
 function jobDurationMinutes(aufwand, teamSize, isEinfuehrung){
   const base = (aufwand!=null ? aufwand : 1) * 60;
   if(isEinfuehrung) return 30;
@@ -3050,7 +3052,7 @@ async function generateTourDispoPdf(opts){
   activeTours.forEach(t=>{
     const col = hexToRgb01(t.color);
     const items = byTour[t.id];
-    const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    const mins = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung), 0);
     const right = `${items.length} ${items.length===1?'Auftrag':'Aufträge'}  ·  ${fmtHoursShort(mins)}`;
     const pb = probes[t.id] || {}; const hasPb = !!(pb.name||pb.phone);
     const pr = hasPb ? [(pb.name||'').trim(), (pb.phone||'').trim()].filter(Boolean).join(': ') : '';
@@ -3060,8 +3062,8 @@ async function generateTourDispoPdf(opts){
     items.forEach((o,i)=>{
       if(need(1)){ newPage(false); band(tourLabel, right, col, true, pr); }
       const start = timeToMin(o.assignedTime);
-      const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
-      drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`, t.teamSize);
+      const dur = jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung);
+      drawRow(o, i+1, t, col, `${o.assignedTime} – ${minToTime(start+dur)}`, effTeam(t));
     });
     y -= 30;
   });
@@ -3087,7 +3089,7 @@ async function generateTourDispoPdf(opts){
   activeTours.forEach(t=>{
     y -= 14;
     const col = hexToRgb01(t.color);
-    const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    const mins = byTour[t.id].reduce((s,o)=> s + jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung), 0);
     page.drawRectangle({ x:L, y:y-1, width:9, height:9, color:rgb(col.r,col.g,col.b) });
     page.drawText(T(`${t.name}${probes[t.id] && (probes[t.id].name||probes[t.id].phone) ? ' + Probedame' : ''}  (${fmtHoursShort(mins)})`), { x:L+16, y, size:9.5, font:reg, color:INK });
   });
@@ -3243,7 +3245,7 @@ function renderTouren(){
 
   tours.forEach(t=>{
     const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
-    const totalMin = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    const totalMin = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung), 0);
     const over8h = totalMin > 8*60;
     const card = document.createElement('div');
     card.className='card tourcard';
@@ -3269,7 +3271,7 @@ function renderTouren(){
       </div>
       ${items.length===0 ? '<p class="muted" style="padding:0 18px 16px;font-size:13.5px">Noch keine Aufträge zugeteilt.</p>' :
         items.map(o=>{
-          const dur = jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung);
+          const dur = jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung);
           const end = timeToMin(o.assignedTime) + dur;
           return `<div class="stopline"><span class="swatch" style="background:${t.color}"></span><span class="tm">${o.assignedTime}–${minToTime(end)}</span><span class="ad">${o.auftragNr} · ${o.customerName || o.address.split(',')[0]}</span><button class="rm" data-unassign="${o.auftragNr}" aria-label="Zuteilung entfernen">×</button></div>`;
         }).join('')
@@ -3819,7 +3821,7 @@ async function generateFilledPdf(){
     if(!tour) continue;
     const col = hexToRgb01(tour.color);
     const start = timeToMin(o.assignedTime);
-    const dur = jobDurationMinutes(o.aufwand, tour.teamSize, o.isEinfuehrung);
+    const dur = jobDurationMinutes(o.aufwand, effTeam(tour), o.isEinfuehrung);
     const end = start + dur;
 
     page.drawRectangle({ x:X_SWATCH-4, y:row.y-11, width:(X_RIGHT-X_SWATCH)+8, height:22, color:rgb(1,1,1) });
@@ -3829,7 +3831,7 @@ async function generateFilledPdf(){
       const lbl = `${stopNumber[o.auftragNr]}. ${tour.name}`;
       page.drawText(lbl, { x:X_LEFT, y:row.y, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
       if(o.isUH) drawUhTag(page, X_LEFT + fontBold.widthOfTextAtSize(lbl, 8) + 5, row.y, col, fontBold, rgb);
-      page.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
+      page.drawText(fmtStopLabel(o, effTeam(tour), start, end, dur),
         { x:X_LEFT, y:row.y-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
     });
   }
@@ -3872,7 +3874,7 @@ async function generateFilledPdf(){
     if(!tour) continue;
     const col = hexToRgb01(tour.color);
     const start = timeToMin(o.assignedTime);
-    const dur = jobDurationMinutes(o.aufwand, tour.teamSize, o.isEinfuehrung);
+    const dur = jobDurationMinutes(o.aufwand, effTeam(tour), o.isEinfuehrung);
     const end = start + dur;
     targetPage.drawLine({ start:{x:42.5,y:cursorY+16}, end:{x:552.1,y:cursorY+16}, thickness:0.5, color:rgb(0.6,0.6,0.6), dashArray:[1,2] });
     targetPage.drawText(o.auftragNr, { x:X_AUFTRAG, y:cursorY, size:8, font:fontReg, color:rgb(0,0,0) });
@@ -3883,7 +3885,7 @@ async function generateFilledPdf(){
     const lblX = `${stopNumber[o.auftragNr]}. ${tour.name}`;
     targetPage.drawText(lblX, { x:X_LEFT, y:cursorY, size:8, font:fontBold, color:rgb(col.r,col.g,col.b) });
     if(o.isUH) drawUhTag(targetPage, X_LEFT + fontBold.widthOfTextAtSize(lblX, 8) + 5, cursorY, col, fontBold, rgb);
-    targetPage.drawText(fmtStopLabel(o, tour.teamSize, start, end, dur),
+    targetPage.drawText(fmtStopLabel(o, effTeam(tour), start, end, dur),
       { x:X_LEFT, y:cursorY-9, size:7, font:fontReg, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(o.manual ? 'Manuell ergänzt (nicht in Disponentenliste)' : 'Neu erkannt (nicht in Disponentenliste, aber Datum passt)', { x:X_ADDRESS, y:cursorY-9, size:6.5, font:fontItalic, color:rgb(0.7,0.2,0.15) });
     cursorY -= 26;
@@ -3916,7 +3918,7 @@ async function generateFilledPdf(){
     if(items.length===0) return;
     if(cursorY < 40) return;
     const col = hexToRgb01(t.color);
-    const totalMin = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, t.teamSize, o.isEinfuehrung), 0);
+    const totalMin = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung), 0);
     targetPage.drawRectangle({ x:42.5, y:cursorY, width:8, height:8, color:rgb(col.r,col.g,col.b) });
     targetPage.drawText(`${t.name}  (${fmtHoursShort(totalMin)})`, { x:56, y:cursorY+1, size:7.5, font:fontReg, color:rgb(0,0,0) });
     cursorY -= 12;
