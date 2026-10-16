@@ -1998,25 +1998,28 @@ function removeTour(id){
   renderAll();
 }
 
-/* 2er-Team wieder auflösen: aus «A + B» werden wieder zwei Einzeltouren.
-   Die bereits zugeteilten Aufträge bleiben bei der ersten Tour (A) und
-   können danach neu verteilt werden. */
-function splitTour(id){
-  const t = tours.find(x=>x.id===id);
-  if(!t || !(t.teamSize>1)) return;
-  const parts = String(t.name).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean);
-  const nameA = parts[0] || t.name;
-  const nameB = parts.length>1 ? parts.slice(1).join(' + ') : (nameA + ' 2');
-  if(tours.some(x=> x.id!==t.id && [nameA,nameB].some(n=> x.name.toLowerCase()===n.toLowerCase()))){
-    toast('Eine der beiden Touren gibt es schon – bitte zuerst umbenennen oder entfernen', 'warning'); return;
-  }
-  const used = new Set(tours.map(x=>x.color));
-  const colB = fixedColorForName(nameB) || TOUR_COLORS.find(c=>!used.has(c)) || TOUR_COLORS[tours.length % TOUR_COLORS.length];
-  t.name = nameA; t.teamSize = 1; t.color = fixedColorForName(nameA) || t.color;
-  tours.push({ id: uid(), name: nameB, teamSize: 1, color: colB });
-  saveTours();
-  renderAll();
-  toast(`Team aufgelöst: ${nameA} und ${nameB}`, 'check');
+/* Tour bearbeiten: Mitarbeitende anpassen (Name/Team ändern, eine Person entfernen).
+   Die Tour und alle zugeteilten Aufträge bleiben bestehen. */
+let editTourId = null, editDraft = null;
+function tourParts(name){ return String(name).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean); }
+function startEditTour(id){
+  const t = tours.find(x=>x.id===id); if(!t) return;
+  editTourId = id; editDraft = { name: t.name, size: t.teamSize>1 ? 2 : 1 };
+  renderTouren();
+  const i = document.querySelector('[data-edit-name]'); if(i) i.focus();
+}
+function cancelEditTour(){ editTourId = null; editDraft = null; renderTouren(); }
+function applyEditTour(){
+  const t = tours.find(x=>x.id===editTourId); if(!t || !editDraft) return cancelEditTour();
+  const name = editDraft.name.replace(/\s+/g,' ').trim();
+  if(!name){ toast('Bitte einen Namen eingeben', 'warning'); return; }
+  if(tours.some(x=> x.id!==t.id && x.name.toLowerCase()===name.toLowerCase())){ toast('Diese Tour gibt es schon', 'warning'); return; }
+  const first = tourParts(name)[0] || name;
+  t.name = name; t.teamSize = editDraft.size;
+  const fc = fixedColorForName(first); if(fc) t.color = fc;
+  editTourId = null; editDraft = null;
+  saveTours(); renderAll();
+  toast('Tour angepasst – Aufträge bleiben zugeteilt', 'check');
 }
 
 /* Eine Tour auf eine andere ziehen (Touren-Seite) -> automatisch eine
@@ -3273,13 +3276,24 @@ function renderTouren(){
     card.dataset.tourDrop = t.id;
     card.innerHTML = `
       <div class="card-h">
-        <h2 draggable="true" data-tour-drag="${t.id}" style="cursor:grab" title="Auf eine andere Tour ziehen, um daraus automatisch eine 2er-Tour zu machen"><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>
+        ${editTourId===t.id && editDraft ? `
+        <div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:8px">
+          <label class="muted" style="font-size:11.5px">Mitarbeitende dieser Tour (z. B. «Alba + Angela»)</label>
+          <input type="text" data-edit-name value="${editDraft.name.replace(/"/g,'&quot;')}" style="width:100%;padding:8px 10px;border:1px solid #cfd8db;border-radius:8px;font:inherit">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-s ${editDraft.size===1?'btn-p':''}" style="padding:6px 12px;font-size:13px" data-edit-size="1">1 Person</button>
+            <button class="btn btn-s ${editDraft.size===2?'btn-p':''}" style="padding:6px 12px;font-size:13px" data-edit-size="2">2 Personen</button>
+            ${tourParts(editDraft.name).length>1 ? tourParts(editDraft.name).map(pn=>`<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-edit-without="${pn.replace(/"/g,'&quot;')}">Ohne ${pn}</button>`).join('') : ''}
+          </div>
+          <div style="display:flex;gap:8px"><button class="btn btn-p" style="padding:6px 14px;font-size:13px" data-edit-done>Fertig</button><button class="btn btn-s" style="padding:6px 14px;font-size:13px" data-edit-cancel>Abbrechen</button></div>
+        </div>` : `
+        <h2 draggable="true" data-tour-drag="${t.id}" style="cursor:grab" title="Auf eine andere Tour ziehen, um daraus automatisch eine 2er-Tour zu machen"><span class="tourdot" style="background:${t.color}"></span> ${t.name}${t.teamSize>1?' <span class="muted" style="font-weight:400;font-size:13px">(2 Personen)</span>':''}</h2>`}
         <div style="display:flex;align-items:center;gap:10px">
           <span class="badge ${over8h?'b-warn':'b-neutral'}">${fmtHoursShort(totalMin)}${over8h?' · über 8 Std.':''}</span>
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-map="${t.id}"><svg><use href="#i-route"/></svg>Karte anzeigen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-route="${t.id}"><svg><use href="#i-route"/></svg>Route öffnen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-rapp="${t.id}"><svg><use href="#i-pdf"/></svg>Auftragsrapporte</button>` : ''}
-          ${t.teamSize>1 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-split="${t.id}" title="Aus dem 2er-Team wieder zwei Einzeltouren machen">Team auflösen</button>` : ''}
+          <button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-edit-tour="${t.id}" title="Mitarbeitende dieser Tour anpassen">Personen anpassen</button>
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
       </div>
@@ -3328,7 +3342,12 @@ function renderTouren(){
   wrap.querySelectorAll('[data-probe-name]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probeName]){ probes[i.dataset.probeName].name = i.value; scheduleDaySave(); } }));
   wrap.querySelectorAll('[data-probe-phone]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probePhone]){ probes[i.dataset.probePhone].phone = i.value; scheduleDaySave(); } }));
   wrap.querySelectorAll('[data-free]').forEach(b=> b.addEventListener('click', ()=>{ const id = b.dataset.free; const k = freeTours.indexOf(id); if(k>=0) freeTours.splice(k,1); else freeTours.push(id); renderAll(); }));
-  wrap.querySelectorAll('[data-split]').forEach(btn=> btn.addEventListener('click', ()=> splitTour(btn.dataset.split)));
+  wrap.querySelectorAll('[data-edit-tour]').forEach(btn=> btn.addEventListener('click', ()=> startEditTour(btn.dataset.editTour)));
+  wrap.querySelectorAll('[data-edit-name]').forEach(i=>{ i.addEventListener('input', ()=>{ if(editDraft) editDraft.name = i.value; }); i.addEventListener('keydown', e=>{ if(e.key==='Enter') applyEditTour(); if(e.key==='Escape') cancelEditTour(); }); });
+  wrap.querySelectorAll('[data-edit-size]').forEach(b=> b.addEventListener('click', ()=>{ if(editDraft){ editDraft.size = +b.dataset.editSize; renderTouren(); } }));
+  wrap.querySelectorAll('[data-edit-without]').forEach(b=> b.addEventListener('click', ()=>{ if(!editDraft) return; const rest = tourParts(editDraft.name).filter(x=>x!==b.dataset.editWithout); editDraft.name = rest.join(' + '); editDraft.size = rest.length>1 ? 2 : 1; renderTouren(); }));
+  wrap.querySelectorAll('[data-edit-done]').forEach(b=> b.addEventListener('click', applyEditTour));
+  wrap.querySelectorAll('[data-edit-cancel]').forEach(b=> b.addEventListener('click', cancelEditTour));
   wrap.querySelectorAll('[data-rm]').forEach(btn=> btn.addEventListener('click', ()=> removeTour(btn.dataset.rm)));
   wrap.querySelectorAll('[data-unassign]').forEach(btn=> btn.addEventListener('click', ()=>{
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
