@@ -1998,6 +1998,27 @@ function removeTour(id){
   renderAll();
 }
 
+/* 2er-Team wieder auflösen: aus «A + B» werden wieder zwei Einzeltouren.
+   Die bereits zugeteilten Aufträge bleiben bei der ersten Tour (A) und
+   können danach neu verteilt werden. */
+function splitTour(id){
+  const t = tours.find(x=>x.id===id);
+  if(!t || !(t.teamSize>1)) return;
+  const parts = String(t.name).split(/\s*\+\s*/).map(x=>x.trim()).filter(Boolean);
+  const nameA = parts[0] || t.name;
+  const nameB = parts.length>1 ? parts.slice(1).join(' + ') : (nameA + ' 2');
+  if(tours.some(x=> x.id!==t.id && [nameA,nameB].some(n=> x.name.toLowerCase()===n.toLowerCase()))){
+    toast('Eine der beiden Touren gibt es schon – bitte zuerst umbenennen oder entfernen', 'warning'); return;
+  }
+  const used = new Set(tours.map(x=>x.color));
+  const colB = fixedColorForName(nameB) || TOUR_COLORS.find(c=>!used.has(c)) || TOUR_COLORS[tours.length % TOUR_COLORS.length];
+  t.name = nameA; t.teamSize = 1; t.color = fixedColorForName(nameA) || t.color;
+  tours.push({ id: uid(), name: nameB, teamSize: 1, color: colB });
+  saveTours();
+  renderAll();
+  toast(`Team aufgelöst: ${nameA} und ${nameB}`, 'check');
+}
+
 /* Eine Tour auf eine andere ziehen (Touren-Seite) -> automatisch eine
    2er-Tour daraus machen: Name wird kombiniert, alle bereits zugeteilten
    Aufträge beider Touren wandern auf die neue 2er-Tour, die gezogene Tour
@@ -3258,6 +3279,7 @@ function renderTouren(){
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-map="${t.id}"><svg><use href="#i-route"/></svg>Karte anzeigen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-route="${t.id}"><svg><use href="#i-route"/></svg>Route öffnen</button>` : ''}
           ${items.length>0 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-rapp="${t.id}"><svg><use href="#i-pdf"/></svg>Auftragsrapporte</button>` : ''}
+          ${t.teamSize>1 ? `<button class="btn btn-s" style="padding:6px 12px;font-size:13px" data-split="${t.id}" title="Aus dem 2er-Team wieder zwei Einzeltouren machen">Team auflösen</button>` : ''}
           <button class="icon-btn" aria-label="Tour entfernen" data-rm="${t.id}"><svg><use href="#i-trash"/></svg></button>
         </div>
       </div>
@@ -3306,6 +3328,7 @@ function renderTouren(){
   wrap.querySelectorAll('[data-probe-name]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probeName]){ probes[i.dataset.probeName].name = i.value; scheduleDaySave(); } }));
   wrap.querySelectorAll('[data-probe-phone]').forEach(i=> i.addEventListener('input', ()=>{ if(probes[i.dataset.probePhone]){ probes[i.dataset.probePhone].phone = i.value; scheduleDaySave(); } }));
   wrap.querySelectorAll('[data-free]').forEach(b=> b.addEventListener('click', ()=>{ const id = b.dataset.free; const k = freeTours.indexOf(id); if(k>=0) freeTours.splice(k,1); else freeTours.push(id); renderAll(); }));
+  wrap.querySelectorAll('[data-split]').forEach(btn=> btn.addEventListener('click', ()=> splitTour(btn.dataset.split)));
   wrap.querySelectorAll('[data-rm]').forEach(btn=> btn.addEventListener('click', ()=> removeTour(btn.dataset.rm)));
   wrap.querySelectorAll('[data-unassign]').forEach(btn=> btn.addEventListener('click', ()=>{
     const o = orders.find(x=>x.auftragNr===btn.dataset.unassign);
