@@ -854,6 +854,11 @@ td .name{font-weight:600}
 .kap-t tr.sum td.so{background:#3c3c3b}
 .kap-leg{display:flex;gap:16px;margin:10px 4px 2px;font-size:11.5px;color:var(--cs-fg-2);flex-wrap:wrap}
 .kap-leg i{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-3px;margin-right:5px}
+.kap-selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#effafa;border:1px solid #1b8384;border-radius:12px;padding:10px 14px;margin-bottom:12px;position:sticky;top:8px;z-index:30}
+.kap-selbar.off{background:#f6fafb;border-color:var(--cs-line-strong)}.kap-selbar.off b{color:var(--cs-fg-2)!important;font-weight:400}.kap-selbar.off .btn,.kap-selbar.off input{opacity:.45;pointer-events:none}
+.kap-selbar input{width:80px;padding:7px 9px;border:1px solid var(--cs-line-strong);border-radius:8px;font:inherit;font-size:14px}
+.kap-t td.sel{outline:3px solid #1b8384;outline-offset:-2px;box-shadow:inset 0 0 0 100px rgba(27,131,132,.18)}
+.kap-t th.cl,.kap-t td.rw{cursor:pointer}
 .kap-pop{position:fixed;background:#fff;border:1px solid var(--cs-line-strong);border-radius:12px;box-shadow:0 8px 24px rgba(30,100,110,.22);padding:8px;width:200px;z-index:60}
 .kap-pop div{padding:7px 9px;border-radius:6px;font-size:13px;cursor:pointer}.kap-pop div:hover{background:#eef6f8}
 .kap-pop .t{font-weight:700;color:var(--cs-brand-text);cursor:default}.kap-pop .t:hover{background:none}
@@ -1165,8 +1170,9 @@ body:not(.dept-none) #gate{display:none}
             <span style="flex:1"></span>
             <input type="text" id="kapNewName" placeholder="Name" style="width:150px;padding:8px 10px;border:1px solid var(--cs-line-strong);border-radius:8px;font:inherit;font-size:13px"><button class="btn btn-s" id="kapAddStaff">+ Mitarbeiterin</button>
           </div>
+          <div class="kap-selbar off" id="kapSelBar"><b id="kapSelInfo" style="color:#1b8384">Keine Felder markiert – mit der Maus über die Tabelle ziehen</b><span style="flex:1"></span><label style="font-size:13px">Stunden <input type="number" id="kapSelHrs" min="0" max="24" step="0.5" placeholder="z. B. 6.5"></label><button class="btn btn-p" data-selset="hrs" style="padding:7px 14px;min-height:0">Setzen</button><button class="btn btn-s" data-selset="8" style="padding:7px 12px;min-height:0">8</button><button class="btn btn-s" data-selset="4" style="padding:7px 12px;min-height:0">4</button><button class="btn btn-s" data-selset="0" style="padding:7px 12px;min-height:0">0 frei</button><button class="btn btn-s" data-selset="F" style="padding:7px 12px;min-height:0">Ferien</button><button class="btn btn-s" data-selset="x" style="padding:7px 12px;min-height:0">Leeren</button><button class="btn btn-s" data-selset="clear" style="padding:7px 12px;min-height:0">✕</button></div>
           <div class="card kap-wrap"><div id="kapTable"></div>
-            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Tipp: Pinsel wählen und über mehrere Tage ziehen, oder Zelle ohne Pinsel anklicken.</span></div>
+            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Tipp: Felder mit der Maus aufziehen (oder Umschalt + Klick), dann Stunden eintragen. Klick auf Namen = ganze Zeile, Klick auf Tag = ganze Spalte.</span></div>
           </div>
         </div>
         <div id="kapSa" hidden></div>
@@ -4182,6 +4188,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.getEle
 const KAP_WD = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 const KAP_MON = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 let kap = null, kapStamp = 0, kapTimer = null;
+let kapRows = [], kapSel = null, kapSelecting = false;
 let kapBrush = null, kapPainting = false, kapTab = 'monat', kapEditSat = null;
 const kapNow = new Date();
 let kapY = kapNow.getFullYear(), kapM = kapNow.getMonth();
@@ -4257,6 +4264,9 @@ function kapVal(id, ymd){
   }
   return '';
 }
+function kapNum(v){ const n = parseFloat(v); return (v==='F' || isNaN(n)) ? 0 : n; }
+function kapCls(v){ if(v==='') return 'e'; if(v==='F') return 'vF'; const n = kapNum(v); return n>=8 ? 'v8' : n>0 ? 'v4' : 'v0'; }
+function kapFmtH(n){ return (Math.round(n*100)/100).toString().replace('.',','); }
 function kapSet(id, ymd, v){
   if(kapDow(ymd) === 0) return;
   const key = id+'|'+ymd;
@@ -4275,27 +4285,29 @@ function renderKap(){
   const mk = kapY+'-'+kapPad(kapM+1);
   const ymds = []; for(let d=1; d<=dim; d++) ymds.push(kapYmd(kapY,kapM,d));
   let h = '<table class="kap-t"><tr><th class="nm">Mitarbeiterin</th>';
-  ymds.forEach(y=>{ const w = kapDow(y); h += `<th class="${w===0?'so':w===6?'sa':''}">${w===0?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
+  ymds.forEach(y=>{ const w = kapDow(y); h += `<th class="${w===0?'so':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${w===0?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
   h += '<th class="bm">Bemerkungen</th></tr>';
   const staff = kap.staff.filter(s=>!s.probe).concat(kap.staff.filter(s=>s.probe));
-  staff.forEach(s=>{
-    h += `<tr class="${s.probe?'pr':''}"><td class="nm"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:10.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
+  kapRows = staff.map(s=>s.id);
+  staff.forEach((s,ri)=>{
+    h += `<tr class="${s.probe?'pr':''}"><td class="nm rw" data-kaprow="${ri}"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:10.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
     ymds.forEach(y=>{
       const v = kapVal(s.id, y);
       if(v === 'so'){ h += '<td class="so"></td>'; return; }
-      const cls = v==='' ? 'e' : 'v'+v;
-      h += `<td class="c ${cls}" data-id="${s.id}" data-d="${y}">${v===''?'':v}</td>`;
+      h += `<td class="c ${kapCls(v)}" data-id="${s.id}" data-d="${y}" data-r="${ri}" data-c="${+y.slice(8)}">${v===''?'':(v==='F'?'F':kapFmtH(kapNum(v)))}</td>`;
     });
     h += `<td class="bm"><input type="text" data-kapnote="${s.id}|${mk}" value="${kapEsc(kap.notes[s.id+'|'+mk]||'')}" placeholder=""></td></tr>`;
   });
-  h += '<tr class="sum"><td class="nm">Verfügbar (Personen)</td>';
+  h += '<tr class="sum"><td class="nm">Verfügbare Stunden (total)</td>';
   ymds.forEach(y=>{
     if(kapDow(y) === 0){ h += '<td class="so"></td>'; return; }
-    const c = kap.staff.filter(s=>{ const v = kapVal(s.id,y); return v==='8' || v==='4'; }).length;
-    h += `<td>${c}</td>`;
+    const c = kap.staff.reduce((a,s)=> a + kapNum(kapVal(s.id,y)), 0);
+    h += `<td>${c?kapFmtH(c):'0'}</td>`;
   });
-  h += '<td></td></tr></table>';
+  const mt = kap.staff.reduce((a,s)=> a + ymds.reduce((b,y)=> b + kapNum(kapVal(s.id,y)), 0), 0);
+  h += `<td style="text-align:left;padding:0 8px">Monat: ${kapFmtH(mt)} Std</td></tr></table>`;
   document.getElementById('kapTable').innerHTML = h;
+  kapApplySel();
 }
 function renderKapSa(){
   const host = document.getElementById('kapSa');
@@ -4338,28 +4350,68 @@ function renderKapSa(){
     ${rows ? `<table class="kap-sp"><tr><th>Datum</th><th>Gruppe</th><th>Im Einsatz</th><th>Max.</th><th></th></tr>${rows}</table>` : '<p style="color:var(--cs-fg-2)">Startdatum und Gruppen festlegen, dann erscheint der Plan.</p>'}
     <div style="margin-top:10px"><button class="btn btn-s" id="kapAll">${window.kapShowAll?'Nur die nächsten 10':'Alle Samstage anzeigen'}</button></div></div>`;
 }
+function kapSelCells(){
+  if(!kapSel) return [];
+  const r1 = Math.min(kapSel.r1,kapSel.r2), r2 = Math.max(kapSel.r1,kapSel.r2), c1 = Math.min(kapSel.c1,kapSel.c2), c2 = Math.max(kapSel.c1,kapSel.c2);
+  const out = [];
+  for(let r=r1; r<=r2; r++) for(let c=c1; c<=c2; c++){ const y = kapYmd(kapY,kapM,c); if(kapDow(y)===0 || !kapRows[r]) continue; out.push({id:kapRows[r], d:y}); }
+  return out;
+}
+function kapApplySel(){
+  document.querySelectorAll('.kap-t td.sel').forEach(x=>x.classList.remove('sel'));
+  const bar = document.getElementById('kapSelBar'); if(!bar) return;
+  const cells = kapSelCells();
+  if(!kapSel || !cells.length){ bar.classList.add('off'); document.getElementById('kapSelInfo').textContent = 'Keine Felder markiert – mit der Maus über die Tabelle ziehen'; return; }
+  const set = new Set(cells.map(c=>c.id+'|'+c.d));
+  document.querySelectorAll('.kap-t td.c').forEach(td=>{ if(set.has(td.dataset.id+'|'+td.dataset.d)) td.classList.add('sel'); });
+  bar.classList.remove('off');
+  const rowsN = new Set(cells.map(c=>c.id)).size;
+  document.getElementById('kapSelInfo').textContent = cells.length + (cells.length===1?' Feld':' Felder') + ' markiert · ' + rowsN + (rowsN===1?' Person':' Personen');
+}
+function kapApplyValue(v){
+  const cells = kapSelCells(); if(!cells.length) return;
+  cells.forEach(c=> kapSet(c.id, c.d, v));
+  kapSave(); renderKap();
+  toast(cells.length + ' Felder gesetzt');
+}
 (function kapWire(){
   const root = document.querySelector('[data-view="kap"]');
-  const pop = document.createElement('div'); pop.className = 'kap-pop'; pop.hidden = true; document.body.appendChild(pop);
-  function closePop(){ pop.hidden = true; }
+  function closePop(){}
   function paint(td){
     if(!td || !td.dataset.id || !kapBrush) return;
     kapSet(td.dataset.id, td.dataset.d, kapBrush);
     const v = kapVal(td.dataset.id, td.dataset.d);
-    td.className = 'c ' + (v===''?'e':'v'+v); td.textContent = v;
+    td.className = 'c ' + kapCls(v); td.textContent = v===''?'':(v==='F'?'F':kapFmtH(kapNum(v)));
   }
   root.addEventListener('pointerdown', e=>{
-    const td = e.target.closest('td.c'); if(!td || !kapBrush) return;
-    kapPainting = true; paint(td); e.preventDefault();
+    const td = e.target.closest('td.c'); if(!td) return;
+    if(kapBrush){ kapPainting = true; paint(td); e.preventDefault(); return; }
+    const r = +td.dataset.r, c = +td.dataset.c;
+    if(e.shiftKey && kapSel){ kapSel.r2 = r; kapSel.c2 = c; }
+    else kapSel = { r1:r, c1:c, r2:r, c2:c };
+    kapSelecting = true; kapApplySel(); e.preventDefault();
   });
-  root.addEventListener('pointerover', e=>{ if(kapPainting){ const td = e.target.closest('td.c'); if(td) paint(td); } });
-  document.addEventListener('pointerup', ()=>{ if(kapPainting){ kapPainting = false; kapSave(); renderKap(); } });
+  root.addEventListener('pointerover', e=>{
+    const td = e.target.closest('td.c'); if(!td) return;
+    if(kapPainting) paint(td);
+    else if(kapSelecting && kapSel){ kapSel.r2 = +td.dataset.r; kapSel.c2 = +td.dataset.c; kapApplySel(); }
+  });
+  document.addEventListener('pointerup', ()=>{
+    if(kapPainting){ kapPainting = false; kapSave(); renderKap(); }
+    if(kapSelecting){ kapSelecting = false; const i = document.getElementById('kapSelHrs'); if(i && kapSel) setTimeout(()=>i.focus(), 0); }
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape' && kapSel){ kapSel = null; kapApplySel(); }
+  });
+  root.addEventListener('keydown', e=>{
+    if(e.key === 'Enter' && e.target.id === 'kapSelHrs'){ e.preventDefault(); const v = e.target.value.replace(',','.').trim(); const n = parseFloat(v); if(!isNaN(n) && n>=0 && n<=24){ kapApplyValue(String(n)); e.target.value=''; } else toast('Bitte 0 bis 24 Stunden eingeben'); }
+  });
   root.addEventListener('click', e=>{
     const t = e.target;
-    const tab = t.closest('[data-kaptab]'); if(tab){ kapTab = tab.dataset.kaptab; closePop(); renderKap(); return; }
+    const tab = t.closest('[data-kaptab]'); if(tab){ kapTab = tab.dataset.kaptab; kapSel = null; closePop(); renderKap(); return; }
     const br = t.closest('[data-brush]'); if(br){ kapBrush = (kapBrush === br.dataset.brush) ? null : br.dataset.brush; renderKap(); return; }
-    if(t.closest('#kapPrev')){ kapM--; if(kapM<0){ kapM=11; kapY--; } closePop(); renderKap(); return; }
-    if(t.closest('#kapNext')){ kapM++; if(kapM>11){ kapM=0; kapY++; } closePop(); renderKap(); return; }
+    if(t.closest('#kapPrev')){ kapM--; if(kapM<0){ kapM=11; kapY--; } kapSel = null; closePop(); renderKap(); return; }
+    if(t.closest('#kapNext')){ kapM++; if(kapM>11){ kapM=0; kapY++; } kapSel = null; closePop(); renderKap(); return; }
     if(t.closest('#kapAddStaff')){
       const inp = document.getElementById('kapNewName'); const n = inp.value.trim(); if(!n) return;
       if(kap.staff.some(s=>!s.probe && s.name.toLowerCase()===n.toLowerCase())){ toast('Name gibt es schon'); return; }
@@ -4376,15 +4428,17 @@ function renderKapSa(){
     }
     const wk = t.closest('[data-kapwk]');
     if(wk){ const id = wk.dataset.kapwk; const dim = new Date(kapY,kapM+1,0).getDate(); for(let d=1; d<=dim; d++){ const y = kapYmd(kapY,kapM,d); const w = kapDow(y); if(w>=1 && w<=5 && kap.cells[id+'|'+y] !== 'F') kap.cells[id+'|'+y] = '8'; } kapSave(); renderKap(); toast('Mo–Fr mit 8 Std gefüllt'); return; }
-    const td = t.closest('td.c');
-    if(td && !kapBrush){
-      const id = td.dataset.id, y = td.dataset.d; const nm = (kap.staff.find(s=>s.id===id)||{}).name;
-      document.querySelectorAll('.kap-t td.sel').forEach(x=>x.classList.remove('sel')); td.classList.add('sel');
-      pop.innerHTML = `<div class="t">${kapEsc(nm)} · ${kapFmtDate(y)}</div><div data-pv="8">8 Std ganzer Tag</div><div data-pv="4">4 Std halber Tag</div><div data-pv="0">0 Std frei</div><div data-pv="F">Ferien / Abwesend</div><div data-pv="x">Leeren</div>`;
-      pop.dataset.id = id; pop.dataset.d = y; pop.hidden = false;
-      const r = td.getBoundingClientRect(); pop.style.left = Math.min(r.left, innerWidth-216) + 'px'; pop.style.top = Math.min(r.bottom+4, innerHeight-230) + 'px';
-      return;
+    const sb2 = t.closest('[data-selset]');
+    if(sb2){
+      const k = sb2.dataset.selset;
+      if(k === 'clear'){ kapSel = null; kapApplySel(); return; }
+      if(k === 'hrs'){ const inp = document.getElementById('kapSelHrs'); const n = parseFloat(String(inp.value).replace(',','.')); if(isNaN(n) || n<0 || n>24){ toast('Bitte 0 bis 24 Stunden eingeben'); return; } kapApplyValue(String(n)); inp.value=''; return; }
+      kapApplyValue(k); return;
     }
+    const colh = t.closest('[data-kapcol]');
+    if(colh){ const c = +colh.dataset.kapcol; kapSel = { r1:0, c1:c, r2:kapRows.length-1, c2:c }; kapApplySel(); return; }
+    const rowh = t.closest('[data-kaprow]');
+    if(rowh && !t.closest('button')){ const r = +rowh.dataset.kaprow; kapSel = { r1:r, c1:1, r2:r, c2:new Date(kapY,kapM+1,0).getDate() }; kapApplySel(); return; }
     // Samstage
     const g = t.closest('[data-kapgrm]'); if(g){ const a = g.dataset.kapgrm.split('|'); kap.sat.groups[a[0]] = (kap.sat.groups[a[0]]||[]).filter(x=>x!==a[1]); kapSave(); renderKap(); return; }
     const ed = t.closest('[data-kapedit]'); if(ed){ kapEditSat = (kapEditSat === ed.dataset.kapedit) ? null : ed.dataset.kapedit; renderKap(); return; }
@@ -4394,11 +4448,6 @@ function renderKapSa(){
     if(t.closest('[data-kapcancel]')){ kapEditSat = null; renderKap(); return; }
     if(t.closest('#kapAll')){ window.kapShowAll = !window.kapShowAll; renderKap(); return; }
   });
-  pop.addEventListener('click', e=>{
-    const o = e.target.closest('[data-pv]'); if(!o) return;
-    kapSet(pop.dataset.id, pop.dataset.d, o.dataset.pv); closePop(); kapSave(); renderKap();
-  });
-  document.addEventListener('pointerdown', e=>{ if(!pop.hidden && !e.target.closest('.kap-pop') && !e.target.closest('td.c')) closePop(); });
   root.addEventListener('change', e=>{
     const n = e.target.closest('[data-kapnote]'); if(n){ const v = n.value.trim(); if(v) kap.notes[n.dataset.kapnote] = v; else delete kap.notes[n.dataset.kapnote]; kapSave(); return; }
     const add = e.target.closest('[data-kapgadd]'); if(add && add.value){ const g = add.dataset.kapgadd; (kap.sat.groups[g] = kap.sat.groups[g] || []).push(add.value); kapSave(); renderKap(); return; }
