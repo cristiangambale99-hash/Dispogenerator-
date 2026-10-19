@@ -4328,7 +4328,7 @@ function renderKapSa(){
           first = false; shown++;
         }
       }
-      d = new Date(d.getTime() + 7*864e5);
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate()+7);
       if(!window.kapShowAll && shown >= 10) break;
     }
   }
