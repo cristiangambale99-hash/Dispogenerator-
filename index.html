@@ -4198,9 +4198,9 @@ function kapDow(ymd){ const a = ymd.split('-'); return new Date(+a[0], +a[1]-1, 
 function kapFmtDate(ymd){ const a = ymd.split('-'); return KAP_WD[kapDow(ymd)] + ', ' + a[2] + '.' + a[1] + '.' + a[0]; }
 function kapEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function kapSeed(){
-  const k = { v:1, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
+  const k = { v:1, migr:1, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
   if(DEPT !== 'uh'){
-    k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['nathalia','Nathalia'],['erika','Erika'],['spez','SPEZ'],['lorena','Lorena'],['gabriela','Gabriela'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
+    k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['lorena','Lorena'],['gabriela','Gabriela'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
     k.sat = { start:'2026-10-17', end:'2027-05-29', groups:{ A:['lina','ginett','yulisa'], B:['cristina','gabriela','lorena'] },
       overrides:{ '2026-12-19':['cristina','yulisa','ginett'], '2027-01-02':['cristina','lina','yulisa'], '2027-01-16':['cristina','gabriela','ginett'] } };
     for(let d=28; d<=30; d++) k.cells['lina|'+kapYmd(2026,8,d)] = 'F';
@@ -4208,12 +4208,27 @@ function kapSeed(){
   }
   return k;
 }
+function kapMigrate(k){
+  // Einmalig: Nathalia, Erika und SPEZ gehören nicht mehr zum Springerteam
+  if(!k || k.migr >= 1) return false;
+  k.migr = 1;
+  if(DEPT !== 'uh'){
+    const rm = ['nathalia','erika','spez'];
+    k.staff = (k.staff||[]).filter(x=>!rm.includes(x.id));
+    Object.keys(k.cells||{}).forEach(key=>{ if(rm.some(id=>key.startsWith(id+'|'))) delete k.cells[key]; });
+    Object.keys(k.notes||{}).forEach(key=>{ if(rm.some(id=>key.startsWith(id+'|'))) delete k.notes[key]; });
+    if(k.sat && k.sat.groups) ['A','B'].forEach(g=>{ k.sat.groups[g] = (k.sat.groups[g]||[]).filter(x=>!rm.includes(x)); });
+    if(k.sat && k.sat.overrides) Object.keys(k.sat.overrides).forEach(d=>{ k.sat.overrides[d] = k.sat.overrides[d].filter(x=>!rm.includes(x)); });
+  }
+  return true;
+}
 function kapLoad(){
   try{ const raw = localStorage.getItem(KP+'kap'); if(raw){ const o = JSON.parse(raw); if(o && Array.isArray(o.staff)){ kap = o; } } }catch(e){}
   if(!kap) kap = kapSeed();
   if(!kap.sat) kap.sat = { start:'', end:'', groups:{A:[],B:[]}, overrides:{} };
   kap.sat.groups = kap.sat.groups || {A:[],B:[]}; kap.sat.overrides = kap.sat.overrides || {};
   kap.cells = kap.cells || {}; kap.notes = kap.notes || {};
+  if(kapMigrate(kap)) kapSave();
 }
 function kapSave(){
   try{ localStorage.setItem(KP+'kap', JSON.stringify(kap)); }catch(e){}
@@ -4242,6 +4257,7 @@ async function kapCloudSync(){
     kap = v; kapStamp = st;
     kap.cells = kap.cells || {}; kap.notes = kap.notes || {}; kap.sat = kap.sat || {start:'',end:'',groups:{A:[],B:[]},overrides:{}};
     kap.sat.groups = kap.sat.groups || {A:[],B:[]}; kap.sat.overrides = kap.sat.overrides || {};
+    if(kapMigrate(kap)){ kapSave(); }
     try{ localStorage.setItem(KP+'kap', JSON.stringify(kap)); }catch(e){}
     if(typeof currentView !== 'undefined' && currentView === 'kap' && !kapPainting && !kapEditSat) renderKap();
   }
