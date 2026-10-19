@@ -837,7 +837,16 @@ td .name{font-weight:600}
 .kap-t th{font-weight:400;color:var(--cs-fg-2);height:38px;line-height:1.1;font-size:10px}
 .kap-t th b{color:var(--cs-fg);font-size:11px}
 .kap-t th.sa{background:#fff3e0}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
-.kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 8px;min-width:250px;max-width:250px;background:#fff;position:sticky;left:0;z-index:1;font-size:12.5px;white-space:nowrap}
+.kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 8px;min-width:250px;max-width:250px;background:#fff;position:sticky;left:292px;z-index:1;font-size:12.5px;white-space:nowrap}
+.kap-t td.x,.kap-t th.x{background:#fff;position:sticky;z-index:1;padding:0 4px;min-width:0}
+.kap-t td.x0,.kap-t th.x0{left:0;min-width:56px;max-width:56px;width:56px}.kap-t td.x1,.kap-t th.x1{left:56px;min-width:56px;max-width:56px;width:56px}.kap-t td.x2,.kap-t th.x2{left:112px;min-width:76px;max-width:76px;width:76px}.kap-t td.x3,.kap-t th.x3{left:188px;min-width:104px;max-width:104px;width:104px}
+.kap-t input.mi{width:100%;box-sizing:border-box;border:1px solid #d3e3e6;border-radius:6px;padding:4px 5px;font:inherit;font-size:12px;text-align:center;background:#fff;color:var(--cs-fg);height:23px}
+.kap-t input.mi:disabled{background:#f4f7f8;border-style:dashed;color:#bbb}
+.kap-t input.mi.warn{border-color:#d9822b;background:#fff8ee}
+.kap-t input.cbx{width:17px;height:17px;accent-color:#1b8384;cursor:pointer;vertical-align:middle}
+.kap-t tr.pr td.x{background:#fff7b8}
+.kap-t tr.sum td.x{background:#f1f8f9}
+@media(max-width:900px){.kap-t td.x0,.kap-t th.x0,.kap-t td.x1,.kap-t th.x1,.kap-t td.x2,.kap-t th.x2,.kap-t td.x3,.kap-t th.x3{position:static}.kap-t td.nm,.kap-t th.nm{left:0}}
 .kap-t .nmf{display:flex;align-items:center;gap:4px}.kap-t .nmt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .kap-t td.nm .rx{white-space:nowrap;border:0;background:none;color:var(--cs-fg-2);cursor:pointer;font-size:13px;padding:0 3px}
 .kap-t td.nm .rx:hover{color:var(--cs-err)}
@@ -1172,7 +1181,7 @@ body:not(.dept-none) #gate{display:none}
           </div>
           <div class="kap-selbar off" id="kapSelBar"><b id="kapSelInfo" style="color:#1b8384">Keine Felder markiert – mit der Maus über die Tabelle ziehen</b><span style="flex:1"></span><label style="font-size:13px">Stunden <input type="number" id="kapSelHrs" min="0" max="24" step="0.5" placeholder="z. B. 6.5"></label><button class="btn btn-p" data-selset="hrs" style="padding:7px 14px;min-height:0">Setzen</button><button class="btn btn-s" data-selset="8" style="padding:7px 12px;min-height:0">8</button><button class="btn btn-s" data-selset="4" style="padding:7px 12px;min-height:0">4</button><button class="btn btn-s" data-selset="0" style="padding:7px 12px;min-height:0">0 frei</button><button class="btn btn-s" data-selset="F" style="padding:7px 12px;min-height:0">Ferien</button><button class="btn btn-s" data-selset="x" style="padding:7px 12px;min-height:0">Leeren</button><button class="btn btn-s" data-selset="clear" style="padding:7px 12px;min-height:0">✕</button></div>
           <div class="card kap-wrap"><div id="kapTable"></div>
-            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Tipp: Felder mit der Maus aufziehen (oder Umschalt + Klick), dann Stunden eintragen. Klick auf Namen = ganze Zeile, Klick auf Tag = ganze Spalte.</span></div>
+            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Auto-Prüfung = Führerausweis vorhanden, Firmenauto = hat ein Geschäftsauto (dann Fahrzeugnummer). Tipp: Felder mit der Maus aufziehen (oder Umschalt + Klick), dann Stunden eintragen. Klick auf Namen = ganze Zeile, Klick auf Tag = ganze Spalte.</span></div>
           </div>
         </div>
         <div id="kapSa" hidden></div>
@@ -4198,9 +4207,10 @@ function kapDow(ymd){ const a = ymd.split('-'); return new Date(+a[0], +a[1]-1, 
 function kapFmtDate(ymd){ const a = ymd.split('-'); return KAP_WD[kapDow(ymd)] + ', ' + a[2] + '.' + a[1] + '.' + a[0]; }
 function kapEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function kapSeed(){
-  const k = { v:1, migr:1, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
+  const k = { v:1, migr:2, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
   if(DEPT !== 'uh'){
     k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['lorena','Lorena'],['gabriela','Gabriela'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
+    kapFillStamm(k);
     k.sat = { start:'2026-10-17', end:'2027-05-29', groups:{ A:['lina','ginett','yulisa'], B:['cristina','gabriela','lorena'] },
       overrides:{ '2026-12-19':['cristina','yulisa','ginett'], '2027-01-02':['cristina','lina','yulisa'], '2027-01-16':['cristina','gabriela','ginett'] } };
     for(let d=28; d<=30; d++) k.cells['lina|'+kapYmd(2026,8,d)] = 'F';
@@ -4208,10 +4218,16 @@ function kapSeed(){
   }
   return k;
 }
+const KAP_STAMM = { lina:['44950',true,true,'50'], alba:['46773',true,true,'44'], ginett:['46843',true,true,'55'], cristina:['47089',true,true,'60'], yulisa:['',true,false,''], lorena:['',true,true,'43'], gabriela:['',false,false,''] };
+function kapFillStamm(k){
+  (k.staff||[]).forEach(s=>{ const d = KAP_STAMM[s.id]; if(!d || s.probe) return; if(s.ma === undefined) s.ma = d[0]; if(s.pruef === undefined) s.pruef = d[1]; if(s.auto === undefined) s.auto = d[2]; if(s.fzg === undefined) s.fzg = d[3]; });
+}
 function kapMigrate(k){
   // Einmalig: Nathalia, Erika und SPEZ gehören nicht mehr zum Springerteam
-  if(!k || k.migr >= 1) return false;
-  k.migr = 1;
+  if(!k) return false;
+  if(k.migr >= 2) return false;
+  if(k.migr >= 1){ k.migr = 2; if(DEPT !== 'uh') kapFillStamm(k); return true; }
+  k.migr = 2;
   if(DEPT !== 'uh'){
     const rm = ['nathalia','erika','spez'];
     k.staff = (k.staff||[]).filter(x=>!rm.includes(x.id));
@@ -4219,6 +4235,7 @@ function kapMigrate(k){
     Object.keys(k.notes||{}).forEach(key=>{ if(rm.some(id=>key.startsWith(id+'|'))) delete k.notes[key]; });
     if(k.sat && k.sat.groups) ['A','B'].forEach(g=>{ k.sat.groups[g] = (k.sat.groups[g]||[]).filter(x=>!rm.includes(x)); });
     if(k.sat && k.sat.overrides) Object.keys(k.sat.overrides).forEach(d=>{ k.sat.overrides[d] = k.sat.overrides[d].filter(x=>!rm.includes(x)); });
+    kapFillStamm(k);
   }
   return true;
 }
@@ -4300,13 +4317,15 @@ function renderKap(){
   if(kapTab === 'sa'){ renderKapSa(); return; }
   const mk = kapY+'-'+kapPad(kapM+1);
   const ymds = []; for(let d=1; d<=dim; d++) ymds.push(kapYmd(kapY,kapM,d));
-  let h = '<table class="kap-t"><tr><th class="nm">Mitarbeiterin</th>';
+  let h = '<table class="kap-t"><tr><th class="x x0" title="Autoprüfung (Führerausweis) vorhanden">Auto-<br>prüfung</th><th class="x x1" title="Hat ein Geschäftsauto">Firmen-<br>auto</th><th class="x x2">Fzg-Nr.</th><th class="x x3">MA-Nr.</th><th class="nm">Mitarbeiterin</th>';
   ymds.forEach(y=>{ const w = kapDow(y); h += `<th class="${w===0?'so':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${w===0?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
   h += '<th class="bm">Bemerkungen</th></tr>';
   const staff = kap.staff.filter(s=>!s.probe).concat(kap.staff.filter(s=>s.probe));
   kapRows = staff.map(s=>s.id);
   staff.forEach((s,ri)=>{
-    h += `<tr class="${s.probe?'pr':''}"><td class="nm rw" data-kaprow="${ri}"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:10.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
+    const dup = !!(s.auto && s.fzg && kap.staff.some(o=>o.id!==s.id && o.auto && String(o.fzg||'').trim()===String(s.fzg).trim()));
+    const dupName = dup ? (kap.staff.find(o=>o.id!==s.id && o.auto && String(o.fzg||'').trim()===String(s.fzg).trim())||{}).name : '';
+    h += `<tr class="${s.probe?'pr':''}">${s.probe ? '<td class="x x0"></td><td class="x x1"></td><td class="x x2"></td><td class="x x3"></td>' : `<td class="x x0" style="text-align:center"><input type="checkbox" class="cbx" data-kappr="${s.id}" ${s.pruef?'checked':''} aria-label="Autoprüfung"></td><td class="x x1" style="text-align:center"><input type="checkbox" class="cbx" data-kapauto="${s.id}" ${s.auto?'checked':''} aria-label="Firmenauto"></td><td class="x x2"><input type="text" class="mi${dup?' warn':''}" data-kapf="${s.id}|fzg" value="${kapEsc(s.auto?(s.fzg||''):'')}" ${s.auto?'placeholder="Nr."':'disabled placeholder="–"'} ${dup?`title="Fahrzeug ${kapEsc(s.fzg)} ist schon bei ${kapEsc(dupName)}"`:''}></td><td class="x x3"><input type="text" class="mi" data-kapf="${s.id}|ma" value="${kapEsc(s.ma||'')}" placeholder="Nr."></td>`}<td class="nm rw" data-kaprow="${ri}"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:10.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
     ymds.forEach(y=>{
       const v = kapVal(s.id, y);
       if(v === 'so'){ h += '<td class="so"></td>'; return; }
@@ -4314,7 +4333,7 @@ function renderKap(){
     });
     h += `<td class="bm"><input type="text" data-kapnote="${s.id}|${mk}" value="${kapEsc(kap.notes[s.id+'|'+mk]||'')}" placeholder=""></td></tr>`;
   });
-  h += '<tr class="sum"><td class="nm">Verfügbare Stunden (total)</td>';
+  h += '<tr class="sum"><td class="x x0"></td><td class="x x1"></td><td class="x x2"></td><td class="x x3"></td><td class="nm">Verfügbare Stunden (total)</td>';
   ymds.forEach(y=>{
     if(kapDow(y) === 0){ h += '<td class="so"></td>'; return; }
     const c = kap.staff.reduce((a,s)=> a + kapNum(kapVal(s.id,y)), 0);
@@ -4432,7 +4451,7 @@ function kapApplyValue(v){
       const inp = document.getElementById('kapNewName'); const n = inp.value.trim(); if(!n) return;
       if(kap.staff.some(s=>!s.probe && s.name.toLowerCase()===n.toLowerCase())){ toast('Name gibt es schon'); return; }
       const probe = kap.staff.findIndex(s=>s.probe);
-      const ns = { id:'s'+Date.now().toString(36), name:n, probe:false };
+      const ns = { id:'s'+Date.now().toString(36), name:n, probe:false, ma:'', pruef:false, auto:false, fzg:'' };
       if(probe >= 0) kap.staff.splice(probe, 0, ns); else kap.staff.push(ns);
       inp.value = ''; kapSave(); renderKap(); return;
     }
@@ -4465,6 +4484,12 @@ function kapApplyValue(v){
     if(t.closest('#kapAll')){ window.kapShowAll = !window.kapShowAll; renderKap(); return; }
   });
   root.addEventListener('change', e=>{
+    const pr = e.target.closest('[data-kappr]');
+    if(pr){ const st = kap.staff.find(x=>x.id===pr.dataset.kappr); if(st){ st.pruef = pr.checked; if(!st.pruef){ st.auto = false; st.fzg = ''; } kapSave(); renderKap(); } return; }
+    const au = e.target.closest('[data-kapauto]');
+    if(au){ const st = kap.staff.find(x=>x.id===au.dataset.kapauto); if(st){ st.auto = au.checked; if(st.auto) st.pruef = true; if(!st.auto) st.fzg = ''; kapSave(); renderKap(); } return; }
+    const ff = e.target.closest('[data-kapf]');
+    if(ff){ const a = ff.dataset.kapf.split('|'); const st = kap.staff.find(x=>x.id===a[0]); if(st){ st[a[1]] = ff.value.trim(); kapSave(); renderKap(); } return; }
     const n = e.target.closest('[data-kapnote]'); if(n){ const v = n.value.trim(); if(v) kap.notes[n.dataset.kapnote] = v; else delete kap.notes[n.dataset.kapnote]; kapSave(); return; }
     const add = e.target.closest('[data-kapgadd]'); if(add && add.value){ const g = add.dataset.kapgadd; (kap.sat.groups[g] = kap.sat.groups[g] || []).push(add.value); kapSave(); renderKap(); return; }
     const st = e.target.closest('[data-kapsat]'); if(st){ kap.sat[st.dataset.kapsat] = st.value; kapSave(); renderKap(); }
