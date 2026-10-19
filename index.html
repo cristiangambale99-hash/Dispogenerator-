@@ -832,25 +832,27 @@ td .name{font-weight:600}
 .kap-br{padding:7px 13px;border-radius:8px;border:1px solid var(--cs-line-strong);background:var(--cs-surface);font-size:13px;cursor:pointer;color:var(--cs-fg)}
 .kap-br.on{outline:2px solid #1b8384;outline-offset:0}
 .kap-wrap{overflow:auto;padding:12px}
-.kap-t{border-collapse:collapse;font-variant-numeric:tabular-nums;user-select:none}
-.kap-t th,.kap-t td{border:1px solid #e4eef1;text-align:center;padding:0;height:28px;min-width:26px;font-size:11.5px}
+.kap-t{border-collapse:collapse;font-variant-numeric:tabular-nums;user-select:none;table-layout:fixed;width:100%;min-width:880px}
+[data-view="kap"] .content{max-width:none}
+.kap-t th.x,.kap-t th.nm,.kap-t th.bm{font-size:9px;letter-spacing:0}
+.kap-t th,.kap-t td{border:1px solid #e4eef1;text-align:center;padding:0;height:28px;min-width:0;font-size:11.5px;overflow:hidden}
 .kap-t th{font-weight:400;color:var(--cs-fg-2);height:38px;line-height:1.1;font-size:10px}
 .kap-t th b{color:var(--cs-fg);font-size:11px}
 .kap-t th.sa{background:#fff3e0}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
-.kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 8px;min-width:250px;max-width:250px;background:#fff;position:sticky;left:292px;z-index:1;font-size:12.5px;white-space:nowrap}
-.kap-t td.x,.kap-t th.x{background:#fff;position:sticky;z-index:1;padding:0 4px;min-width:0}
-.kap-t td.x0,.kap-t th.x0{left:0;min-width:56px;max-width:56px;width:56px}.kap-t td.x1,.kap-t th.x1{left:56px;min-width:56px;max-width:56px;width:56px}.kap-t td.x2,.kap-t th.x2{left:112px;min-width:76px;max-width:76px;width:76px}.kap-t td.x3,.kap-t th.x3{left:188px;min-width:104px;max-width:104px;width:104px}
-.kap-t input.mi{width:100%;box-sizing:border-box;border:1px solid #d3e3e6;border-radius:6px;padding:4px 5px;font:inherit;font-size:12px;text-align:center;background:#fff;color:var(--cs-fg);height:23px}
+.kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 6px;width:200px;min-width:0;max-width:none;background:#fff;font-size:12.5px;white-space:nowrap}
+.kap-t td.x,.kap-t th.x{background:#fff;padding:0 3px;min-width:0}
+.kap-t td.x0,.kap-t th.x0,.kap-t td.x1,.kap-t th.x1{width:48px;min-width:0;max-width:none}.kap-t td.x2,.kap-t th.x2{width:58px;min-width:0;max-width:none}.kap-t td.x3,.kap-t th.x3{width:76px;min-width:0;max-width:none}
+.kap-t input.mi{min-width:0;width:100%;box-sizing:border-box;border:1px solid #d3e3e6;border-radius:6px;padding:4px 5px;font:inherit;font-size:12px;text-align:center;background:#fff;color:var(--cs-fg);height:23px}
 .kap-t input.mi:disabled{background:#f4f7f8;border-style:dashed;color:#bbb}
 .kap-t input.mi.warn{border-color:#d9822b;background:#fff8ee}
 .kap-t input.cbx{width:17px;height:17px;accent-color:#1b8384;cursor:pointer;vertical-align:middle}
 .kap-t tr.pr td.x{background:#fff7b8}
 .kap-t tr.sum td.x{background:#f1f8f9}
 @media(max-width:900px){.kap-t td.x0,.kap-t th.x0,.kap-t td.x1,.kap-t th.x1,.kap-t td.x2,.kap-t th.x2,.kap-t td.x3,.kap-t th.x3{position:static}.kap-t td.nm,.kap-t th.nm{left:0}}
-.kap-t .nmf{display:flex;align-items:center;gap:4px}.kap-t .nmt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kap-t .nmf{display:flex;align-items:center;gap:2px}.kap-t .nmt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .kap-t td.nm .rx{white-space:nowrap;border:0;background:none;color:var(--cs-fg-2);cursor:pointer;font-size:13px;padding:0 3px}
 .kap-t td.nm .rx:hover{color:var(--cs-err)}
-.kap-t td.bm,.kap-t th.bm{min-width:170px;text-align:left;padding:0}
+.kap-t td.bm,.kap-t th.bm{width:120px;min-width:0;text-align:left;padding:0}
 .kap-t td.bm input{width:100%;border:0;background:transparent;font:inherit;font-size:11.5px;padding:0 8px;height:27px;color:var(--cs-fg-2)}
 .kap-t td.c{cursor:pointer}
 .kap-t td.v8{background:#9ad3d3}.kap-t td.v4{background:#bee2e9}.kap-t td.v0{background:#fff;color:#bbb}
@@ -4209,7 +4211,7 @@ function kapEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&am
 function kapSeed(){
   const k = { v:1, migr:2, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
   if(DEPT !== 'uh'){
-    k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['lorena','Lorena'],['gabriela','Gabriela'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
+    k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['gabriela','Gabriela'],['lorena','Lorena'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
     kapFillStamm(k);
     k.sat = { start:'2026-10-17', end:'2027-05-29', groups:{ A:['lina','ginett','yulisa'], B:['cristina','gabriela','lorena'] },
       overrides:{ '2026-12-19':['cristina','yulisa','ginett'], '2027-01-02':['cristina','lina','yulisa'], '2027-01-16':['cristina','gabriela','ginett'] } };
@@ -4325,7 +4327,7 @@ function renderKap(){
   staff.forEach((s,ri)=>{
     const dup = !!(s.auto && s.fzg && kap.staff.some(o=>o.id!==s.id && o.auto && String(o.fzg||'').trim()===String(s.fzg).trim()));
     const dupName = dup ? (kap.staff.find(o=>o.id!==s.id && o.auto && String(o.fzg||'').trim()===String(s.fzg).trim())||{}).name : '';
-    h += `<tr class="${s.probe?'pr':''}">${s.probe ? '<td class="x x0"></td><td class="x x1"></td><td class="x x2"></td><td class="x x3"></td>' : `<td class="x x0" style="text-align:center"><input type="checkbox" class="cbx" data-kappr="${s.id}" ${s.pruef?'checked':''} aria-label="Autoprüfung"></td><td class="x x1" style="text-align:center"><input type="checkbox" class="cbx" data-kapauto="${s.id}" ${s.auto?'checked':''} aria-label="Firmenauto"></td><td class="x x2"><input type="text" class="mi${dup?' warn':''}" data-kapf="${s.id}|fzg" value="${kapEsc(s.auto?(s.fzg||''):'')}" ${s.auto?'placeholder="Nr."':'disabled placeholder="–"'} ${dup?`title="Fahrzeug ${kapEsc(s.fzg)} ist schon bei ${kapEsc(dupName)}"`:''}></td><td class="x x3"><input type="text" class="mi" data-kapf="${s.id}|ma" value="${kapEsc(s.ma||'')}" placeholder="Nr."></td>`}<td class="nm rw" data-kaprow="${ri}"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:10.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
+    h += `<tr class="${s.probe?'pr':''}">${s.probe ? '<td class="x x0"></td><td class="x x1"></td><td class="x x2"></td><td class="x x3"></td>' : `<td class="x x0" style="text-align:center"><input type="checkbox" class="cbx" data-kappr="${s.id}" ${s.pruef?'checked':''} aria-label="Autoprüfung"></td><td class="x x1" style="text-align:center"><input type="checkbox" class="cbx" data-kapauto="${s.id}" ${s.auto?'checked':''} aria-label="Firmenauto"></td><td class="x x2"><input type="text" class="mi${dup?' warn':''}" data-kapf="${s.id}|fzg" value="${kapEsc(s.auto?(s.fzg||''):'')}" ${s.auto?'placeholder="Nr."':'disabled placeholder="–"'} ${dup?`title="Fahrzeug ${kapEsc(s.fzg)} ist schon bei ${kapEsc(dupName)}"`:''}></td><td class="x x3"><input type="text" class="mi" data-kapf="${s.id}|ma" value="${kapEsc(s.ma||'')}" placeholder="Nr."></td>`}<td class="nm rw" data-kaprow="${ri}" title="${kapEsc(s.name)}"><div class="nmf"><span class="nmt">${kapEsc(s.name)}</span><button class="rx" data-kapwk="${s.id}" title="Mo–Fr des Monats mit 8 füllen" style="font-size:9.5px;font-weight:700;color:#1b8384">Mo–Fr</button><button class="rx" data-kaprm="${s.id}" title="Löschen">✕</button></div></td>`;
     ymds.forEach(y=>{
       const v = kapVal(s.id, y);
       if(v === 'so'){ h += '<td class="so"></td>'; return; }
