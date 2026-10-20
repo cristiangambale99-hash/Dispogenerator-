@@ -2399,23 +2399,120 @@ function renderSavedDays(){
    der zugeteilten Reihenfolge – der Disponent muss nichts von Hand
    eintragen.
 ===================================================================== */
-let geocodeCache = (()=>{ try{ const raw = localStorage.getItem('cs-dispo-geocode'); return raw ? JSON.parse(raw) : {}; }catch(e){ return {}; } })();
+/* ---- Geokodierung: mehrstufig, damit JEDER Auftrag auf der Karte erscheint ----
+   Reihenfolge je Adresse (erster Treffer gewinnt):
+   1. Schweizer Bundes-Adressverzeichnis (geo.admin.ch) – exakt, kennt auch "21a", "4B" usw.
+   2. OpenStreetMap/Nominatim (strukturiert, dann Freitext)
+   3. Wiederholung ohne Hausnummer-Buchstabe / ohne Hausnummer (Strassenmitte)
+   4. Nur PLZ + Ort (Ortsmitte) – wird auf der Karte als "ungefähr" markiert
+   Fehlschläge werden NIE zwischengespeichert, Netzwerkfehler werden wiederholt. */
+let geocodeCache = (()=>{
+  try{
+    const raw = localStorage.getItem('cs-dispo-geocode'); const o = raw ? JSON.parse(raw) : {};
+    Object.keys(o).forEach(k=>{ if(!o[k] || typeof o[k].lat !== 'number') delete o[k]; });   // alte Fehlschläge ("null") verwerfen
+    return o;
+  }catch(e){ return {}; }
+})();
 function saveGeocodeCache(){ try{ localStorage.setItem('cs-dispo-geocode', JSON.stringify(geocodeCache)); }catch(e){} }
-let lastGeocodeAt = 0;
+let nominatimGate = Promise.resolve();
+function geoSleep(ms){ return new Promise(r=> setTimeout(r, ms)); }
+const geoDown = { admin:0, nomi:0 };   // Dienst vorübergehend ausgefallen -> übrige Adressen überspringen ihn sofort
+async function geoFetchJson(url, tries=2, svc){
+  if(svc && Date.now() < geoDown[svc]) throw new Error('Dienst vorübergehend nicht erreichbar');
+  let lastErr = null;
+  for(let a=0; a<tries; a++){
+    try{
+      const ctl = new AbortController(); const to = setTimeout(()=> ctl.abort(), 9000);
+      const res = await fetch(url, { signal: ctl.signal, headers:{ Accept:'application/json' } });
+      clearTimeout(to);
+      if(res.ok) return await res.json();
+      lastErr = new Error('HTTP '+res.status);
+      if(res.status !== 429 && res.status < 500) break;
+    }catch(e){ lastErr = e; }
+    await geoSleep(700 * (a+1));
+  }
+  if(svc) geoDown[svc] = Date.now() + 20000;
+  throw lastErr || new Error('Geocoding fehlgeschlagen');
+}
+/* Schweizer Landeskoordinaten (LV95/LV03) -> WGS84 (swisstopo-Näherungsformel, ca. 1 m genau) */
+function chToWgs(a, b){
+  let E = Math.max(a,b), N = Math.min(a,b), e0, n0;
+  if(E > 2000000){ e0 = 2600000; n0 = 1200000; } else { e0 = 600000; n0 = 200000; }
+  const y = (E - e0)/1e6, x = (N - n0)/1e6;
+  const lon = 2.6779094 + 4.728982*y + 0.791484*y*x + 0.1306*y*x*x - 0.0436*y*y*y;
+  const lat = 16.9023892 + 3.238272*x - 0.270978*y*y - 0.002528*x*x - 0.0447*y*y*x - 0.0140*x*x*x;
+  return { lat: lat*100/36, lng: lon*100/36 };
+}
+function geoPointFromAdmin(attrs){
+  if(typeof attrs.lat === 'number' && typeof attrs.lon === 'number' && isFinite(attrs.lat) && isFinite(attrs.lon)) return { lat: attrs.lat, lng: attrs.lon };
+  if(typeof attrs.x === 'number' && typeof attrs.y === 'number') return chToWgs(attrs.x, attrs.y);
+  return null;
+}
+async function geoAdmin(text, origins, plz){
+  const url = 'https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&limit=10&sr=2056&origins=' + origins + '&searchText=' + encodeURIComponent(text);
+  const j = await geoFetchJson(url, 2, 'admin');
+  const list = (j && j.results) || [];
+  const hit = (plz && list.find(r=> r.attrs && String(r.attrs.detail||r.attrs.label||'').includes(plz))) || (plz ? null : list[0]);
+  return hit && hit.attrs ? geoPointFromAdmin(hit.attrs) : null;
+}
+async function geoNominatim(params, plz){
+  const run = async ()=>{
+    const wait = 1100 - (Date.now() - (geoNominatim.last||0)); if(wait > 0) await geoSleep(wait);
+    geoNominatim.last = Date.now();
+    const j = await geoFetchJson('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ch&' + params, 2, 'nomi');
+    const list = Array.isArray(j) ? j : [];
+    const hit = (plz && list.find(r=> r.address && String(r.address.postcode||'') === plz)) || (plz ? null : list[0]);
+    return hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) } : null;
+  };
+  const p = nominatimGate.then(run, run); nominatimGate = p.catch(()=>{}); return p;
+}
+function geoParse(address){
+  const raw = String(address||'').replace(/\s+/g,' ').trim();
+  const m = raw.match(/\b(\d{4})\b\s*([^,]*)$/) || raw.match(/\b(\d{4})\b\s*(.*)$/);
+  const plz = m ? m[1] : '';
+  let ort = m ? m[2] : '';
+  ort = ort.replace(/\(.*?\)/g,'').replace(/\s*\/\s*[A-Z]{2}\b/g,'').replace(/\s*\/.*$/,'').trim();
+  const before = plz ? raw.slice(0, raw.indexOf(plz)).replace(/[,\s]+$/,'') : raw;
+  const parts = before.split(',').map(s=>s.trim()).filter(Boolean);
+  let street = parts.find(p=> /\d/.test(p) && /[A-Za-zÄÖÜäöüéèà]/.test(p)) || parts[0] || '';
+  street = street.replace(/\s+/g,' ');
+  let name = street, nr = '', nrFull = '';
+  const nm = street.match(/^(.*?)[\s,]+(\d+)\s*([A-Za-z])?(?:\s*[\/\-–&+]\s*(\d*)\s*([A-Za-z])?)?\s*$/);
+  if(nm){ name = nm[1].trim(); nr = nm[2]; nrFull = nm[2] + (nm[3]||''); }
+  return { plz, ort, street, name, nr, nrFull };
+}
 async function geocodeAddress(address){
-  const key = address.trim().toLowerCase();
+  const key = String(address||'').trim().toLowerCase();
   if(key in geocodeCache) return geocodeCache[key];
-  const wait = 1000 - (Date.now() - lastGeocodeAt);
-  if(wait > 0) await new Promise(r=> setTimeout(r, wait));
-  lastGeocodeAt = Date.now();
-  const q = encodeURIComponent(address + ', Schweiz');
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ch&q=${q}`);
-  if(!res.ok) throw new Error('Geocoding fehlgeschlagen');
-  const data = await res.json();
-  const point = data.length ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
-  geocodeCache[key] = point;
-  saveGeocodeCache();
-  return point;
+  const a = geoParse(address);
+  const tail = (a.plz + ' ' + a.ort).trim();
+  const found = (pt, approx)=>{ const r = { lat: pt.lat, lng: pt.lng }; if(approx) r.approx = approx; if(!approx || approx !== 'Fehler'){ geocodeCache[key] = r; saveGeocodeCache(); } return r; };
+  const tries = [];   // [Funktion, Genauigkeit]
+  if(a.name && a.nrFull){
+    tries.push([()=> geoAdmin(`${a.name} ${a.nrFull} ${tail}`, 'address', a.plz), '']);
+    tries.push([()=> geoNominatim(`street=${encodeURIComponent(a.nrFull+' '+a.name)}&postalcode=${a.plz}&city=${encodeURIComponent(a.ort)}`, a.plz), '']);
+    if(a.nrFull !== a.nr){
+      tries.push([()=> geoAdmin(`${a.name} ${a.nr} ${tail}`, 'address', a.plz), '']);
+      tries.push([()=> geoNominatim(`street=${encodeURIComponent(a.nr+' '+a.name)}&postalcode=${a.plz}&city=${encodeURIComponent(a.ort)}`, a.plz), '']);
+    }
+  }
+  tries.push([()=> geoNominatim('q=' + encodeURIComponent(a.street + ', ' + tail + ', Schweiz'), a.plz), '']);
+  if(a.name){
+    tries.push([()=> geoAdmin(`${a.name} ${tail}`, 'address', a.plz), 'Strasse']);
+    tries.push([()=> geoNominatim(`street=${encodeURIComponent(a.name)}&postalcode=${a.plz}&city=${encodeURIComponent(a.ort)}`, a.plz), 'Strasse']);
+  }
+  if(a.plz){
+    tries.push([()=> geoAdmin(`${a.plz} ${a.ort}`, 'zipcode,gg25', a.plz), 'PLZ']);
+    tries.push([()=> geoNominatim(`postalcode=${a.plz}&city=${encodeURIComponent(a.ort)}`, a.plz), 'PLZ']);
+    tries.push([()=> geoNominatim(`postalcode=${a.plz}`, a.plz), 'PLZ']);
+  }
+  if(a.ort){ tries.push([()=> geoAdmin(a.ort, 'gg25', ''), 'PLZ']); tries.push([()=> geoNominatim('q=' + encodeURIComponent(a.ort + ', Schweiz'), ''), 'PLZ']); }
+  let hadError = false;
+  for(const [fn, approx] of tries){
+    try{ const pt = await fn(); if(pt && isFinite(pt.lat) && isFinite(pt.lng)) return found(pt, approx); }
+    catch(e){ hadError = true; }
+  }
+  return null;   // nichts gefunden: NICHT zwischenspeichern, beim nächsten Öffnen wird erneut gesucht
 }
 
 let tourMapInstance = null;
@@ -2552,23 +2649,48 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
   if(tourMapLayer) tourMapLayer.remove();
   tourMapLayer = L.layerGroup().addTo(tourMapInstance);
 
+  /* 1. Alle Adressen auflösen (4 parallel, mit zweitem Durchlauf für Fehlschläge) */
+  const res = new Array(items.length).fill(null);
+  let done = 0;
+  const resolveAll = async (idxs)=>{
+    let next = 0;
+    const worker = async ()=>{
+      while(next < idxs.length){
+        const i = idxs[next++];
+        try{ res[i] = await geocodeAddress(items[i].address); }catch(e){ res[i] = null; }
+        done++; statusEl.textContent = `Adresse ${Math.min(done, items.length)} von ${items.length} wird geladen …`;
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  };
+  geoDown.admin = 0; geoDown.nomi = 0;
+  await resolveAll(items.map((_,i)=>i));
+  let missing = items.map((_,i)=>i).filter(i=>!res[i]);
+  if(missing.length){ statusEl.textContent = `${missing.length} Adresse${missing.length>1?'n':''} werden erneut gesucht …`; done = items.length - missing.length; geoDown.admin = 0; geoDown.nomi = 0; await geoSleep(1200); await resolveAll(missing); }
+
+  /* 2. Marker zeichnen – Aufträge an derselben Adresse werden nebeneinander gelegt,
+        damit wirklich jeder Auftrag sichtbar und anklickbar ist */
   const points = [];
-  let failed = 0;
+  const failedItems = [];
+  const groups = {};
+  items.forEach((o,i)=>{ const pt = res[i]; if(pt){ const k = pt.lat.toFixed(4)+','+pt.lng.toFixed(4); (groups[k] = groups[k] || []).push(i); } });
+  let approxCount = 0;
   for(let i=0;i<items.length;i++){
-    const o = items[i];
-    statusEl.textContent = `Adresse ${i+1} von ${items.length} wird geladen …`;
-    let pt = null;
-    try{ pt = await geocodeAddress(o.address); }catch(e){ pt = null; }
-    if(pt){
-      points.push(pt);
-      const color = colorFn(o,i);
-      const icon = L.divIcon({ className:'', html: labelFn(o,i,color), iconSize:[26,26], iconAnchor:[13,13] });
-      const marker = L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer).bindPopup(popupFn(o,i), { maxWidth:280, minWidth:230 });
-      if(onPopupOpen) marker.on('popupopen', ev=> onPopupOpen(ev, o));
-    } else {
-      failed++;
+    const o = items[i]; const pt = res[i];
+    if(!pt){ failedItems.push(o); continue; }
+    points.push(pt);
+    const grp = groups[pt.lat.toFixed(4)+','+pt.lng.toFixed(4)]; const n = grp.length, k = grp.indexOf(i);
+    const off = n > 1 ? [Math.round(15*Math.cos(2*Math.PI*k/n - Math.PI/2)), Math.round(15*Math.sin(2*Math.PI*k/n - Math.PI/2))] : [0,0];
+    const color = colorFn(o,i);
+    const icon = L.divIcon({ className:'', html: labelFn(o,i,color), iconSize:[26,26], iconAnchor:[13 - off[0], 13 - off[1]] });
+    if(pt.approx){
+      approxCount++;
+      L.circle([pt.lat, pt.lng], { radius: pt.approx==='PLZ' ? 500 : 90, color:'#b7641f', weight:1.5, dashArray:'4,5', fillColor:'#e0a03a', fillOpacity:.12, interactive:false }).addTo(tourMapLayer);
     }
+    const marker = L.marker([pt.lat, pt.lng], {icon}).addTo(tourMapLayer).bindPopup(popupFn(o,i) + (pt.approx ? `<div style="margin-top:6px;font-size:11.5px;color:#b7641f">Position nur ungefähr (${pt.approx==='PLZ'?'nur Ortsmitte':'Strassenmitte'}) – Adresse prüfen.</div>` : ''), { maxWidth:280, minWidth:230 });
+    if(onPopupOpen) marker.on('popupopen', ev=> onPopupOpen(ev, o));
   }
+  const failed = failedItems.length;
 
   let routeSummaryText = '';
   if(points.length>0){
@@ -2592,9 +2714,13 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
     }
     tourMapInstance.fitBounds(boundsCoords, { padding:[40,40] });
   }
-  statusEl.textContent = failed>0
-    ? `${points.length} von ${items.length} Adressen gefunden – ${failed} nicht auffindbar (Adresse prüfen).${routeSummaryText}`
-    : `${points.length} Stopp${points.length>1?'s':''} auf der Karte${connectRoute?', verbunden':''}.${routeSummaryText}`;
+  const approxTxt = approxCount ? ` · ${approxCount} nur ungefähr (orange Kreis)` : '';
+  if(failed>0){
+    statusEl.innerHTML = `<b style="color:#b8453c">${failed} von ${items.length} Aufträgen konnten nicht lokalisiert werden:</b> ${failedItems.map(o=> String(o.auftragNr).replace(/</g,'&lt;')+' ('+String(o.address).replace(/</g,'&lt;')+')').join('; ')} <button type="button" id="mapRetryBtn" class="btn btn-s" style="padding:3px 10px;min-height:0;margin-left:6px">Erneut versuchen</button>${routeSummaryText}`;
+    const rb = document.getElementById('mapRetryBtn'); if(rb) rb.addEventListener('click', ()=>{ if(currentMapRefresh) currentMapRefresh(); });
+  } else {
+    statusEl.textContent = `Alle ${items.length} Auftr${items.length>1?'äge':'ag'} auf der Karte${connectRoute?', verbunden':''}${approxTxt}.${routeSummaryText}`;
+  }
 }
 
 async function openTourMap(tourId){
