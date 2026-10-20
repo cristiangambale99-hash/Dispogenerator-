@@ -886,6 +886,21 @@ td .name{font-weight:600}
 .kap-ga{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}.kap-ga.A{background:#bee2e9;color:#1b5f66}.kap-ga.B{background:#d9f0e6;color:#1b6a52}
 .kap-ed{background:#f6fafb;border:1px solid var(--cs-line);border-radius:10px;padding:10px;margin:6px 0}
 .kap-ed label{display:inline-flex;gap:5px;align-items:center;margin:2px 12px 2px 0;font-size:13px}
+
+.lv-dz{display:block;border:2px dashed #9AD3D3;background:#f2fbfb;border-radius:14px;padding:22px;text-align:center;color:#187778;cursor:pointer}
+.lv-dz.drag{background:#dff4f4;border-color:#2BB6B7}
+.lv-dz b{display:block;font-size:14px;margin-bottom:4px}.lv-dz small{color:#767676}
+table.lv-t{width:100%;border-collapse:collapse}
+table.lv-t th{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#767676;text-align:left;padding:8px 10px;border-bottom:1px solid #dbe9ec}
+table.lv-t td{padding:9px 10px;border-bottom:1px solid #eef4f6;font-size:13px;vertical-align:middle}
+table.lv-t select{border:1px solid #c5dde1;border-radius:8px;padding:5px 8px;font:inherit;font-size:12.5px;background:#fff;max-width:260px}
+.lv-b{border-radius:99px;padding:3px 10px;font-size:11.5px;white-space:nowrap}
+.lv-ok{background:#e3f5f3;color:#1b6a52}.lv-wr{background:#fde7cd;color:#8a4a00}.lv-no{background:#fbe3e0;color:#a33a31}
+.lv-prev{margin-top:16px;font-size:12px;color:#767676}
+.lv-seq{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:8px}
+.lv-pg{border:1px solid #dbe9ec;border-radius:8px;padding:7px 10px;background:#fff;font-size:11.5px;min-width:110px;border-left:4px solid #2BB6B7;color:#3C3C3B}
+.lv-pg.l{border-left-color:#f4b06a;background:#fffaf2}.lv-pg small{display:block;color:#767676}
+.lv-ar{align-self:center;color:#9ab}
 [data-view]{display:none}
 [data-view].on{display:block}
 @media (max-width:820px){
@@ -1272,6 +1287,25 @@ body:not(.dept-none) #gate{display:none}
   <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
     <button class="btn btn-p" id="notifySendBtn">Jetzt senden</button>
     <button class="btn btn-s" id="notifyCancelBtn">Abbrechen</button>
+  </div>
+</div>
+
+<div class="scrim" id="lvScrim"></div>
+<div class="mapmodal" id="lvModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="lvModalTitle" style="height:auto;max-height:92vh;width:min(980px,96vw)">
+  <div class="mapmodal-h">
+    <div><div class="eyebrow">Unterhaltsreinigung</div><h2 id="lvModalTitle">Leistungsverzeichnisse hinzufügen</h2></div>
+    <button class="icon-btn" id="lvClose" aria-label="Schliessen"><svg><use href="#i-x"/></svg></button>
+  </div>
+  <div style="padding:18px 20px;overflow-y:auto;flex:1 1 auto">
+    <label class="lv-dz" id="lvDrop" for="lvInput"><b>Alle Leistungsverzeichnis-PDFs hier ablegen oder auswählen</b><small>Mehrere Dateien gleichzeitig möglich · die App liest Kunde, Adresse und Auftragsnummer aus dem PDF und ordnet automatisch zu</small></label>
+    <input type="file" id="lvInput" accept="application/pdf,.pdf" multiple style="display:none">
+    <p class="muted" id="lvSummary" style="font-size:12.5px;margin:10px 0 14px"></p>
+    <div id="lvTable"></div>
+    <div id="lvPreview" class="lv-prev"></div>
+  </div>
+  <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
+    <button class="btn btn-p" id="lvConfirmBtn">Dispo bestätigen</button>
+    <button class="btn btn-s" id="lvSkipBtn">Ohne Leistungsverzeichnisse bestätigen</button>
   </div>
 </div>
 
@@ -3400,6 +3434,167 @@ function drawUhTag(page, x, y, col, font, rgb){
    in Tagesreihenfolge. Einzige Ergänzung: der Tourname steht auf der Linie "______"
    in der Disposition-Zeile. Dateiname: "Auftragsrapporte <Datum> <Tourname>.pdf".
 ===================================================================== */
+/* ===================== Leistungsverzeichnisse (nur UH) =====================
+   LV-PDFs werden vor "Dispo bestätigen" eingelesen, den Aufträgen zugeordnet
+   (Auftragsnr., Name, Adresse) und in der Rapport-PDF direkt nach dem jeweiligen
+   Auftragsrapport eingefügt. Speicherung je Tag in IndexedDB (nur in diesem Browser). */
+let lvFiles = [];      // [{name, buf, text, pages}]
+let lvAssign = {};     // auftragNr -> fileIdx | -1
+let lvAuto = {};       // auftragNr -> 'auto'|'check'
+let lvSkip = false;
+function lvNorm(s){
+  return ' ' + String(s||'').toLowerCase().replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/é|è|ê/g,'e').replace(/à|â/g,'a').replace(/ß/g,'ss')
+    .replace(/\bstr\.(?=\s|$)/g,'strasse').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ') + ' ';
+}
+async function lvReadFile(file){
+  const buf = await fileToArrayBuffer(file);
+  const doc = await loadPdf(buf.slice(0));
+  let text = '';
+  for(let p=1;p<=doc.numPages;p++){
+    const pg = await doc.getPage(p); const c = await pg.getTextContent();
+    text += c.items.map(i=>i.str).join(' ') + '\n';
+  }
+  /* Dateiname zählt mit (oft "LV_Kunde_Ort.pdf") */
+  return { name:file.name, buf, text: text + ' ' + file.name.replace(/\.pdf$/i,'').replace(/[_-]+/g,' '), pages: doc.numPages };
+}
+function lvScore(o, f){
+  const T = f._n || (f._n = lvNorm(f.text));
+  let sc = 0;
+  if(o.auftragNr && T.includes(String(o.auftragNr))) sc += 100;
+  const st = lvNorm(String(o.street||'').split(',').pop());
+  const stNo = st.trim().replace(/ \d+[a-z]?( [a-z])?$/,'');
+  if(st.trim().length>4 && T.includes(st)) sc += 40;
+  else if(stNo.length>4 && T.includes(' '+stNo+' ')) sc += 15;
+  const plz = (String(o.plzOrt||'').match(/^\d{4}/)||[])[0];
+  if(plz && T.includes(' '+plz+' ')) sc += 10;
+  const ort = lvNorm(String(o.plzOrt||'').replace(/^\d{4}\s*/,'')).trim();
+  if(ort.length>2 && T.includes(' '+ort+' ')) sc += 5;
+  const toks = lvNorm(o.customerName).trim().split(' ').filter(t=>t.length>2 && !/^(herr|frau|familie|firma|und|ag|gmbh)$/.test(t));
+  if(toks.length){
+    const hit = toks.filter(t=>T.includes(' '+t+' ')||T.includes(t)).length;
+    if(hit===toks.length) sc += 40; else if(hit>0 && toks.length>1 && T.includes(toks[toks.length-1])) sc += 20;
+  }
+  return sc;
+}
+function lvAutoMatch(keepManual){
+  const items = orders.filter(o=>o.assignedTourId);
+  items.forEach(o=>{
+    if(keepManual && lvAuto[o.auftragNr]==='manual') return;
+    let best=-1, bs=0, tie=false;
+    lvFiles.forEach((f,i)=>{ const sc = lvScore(o,f); if(sc>bs){ bs=sc; best=i; tie=false; } else if(sc===bs && sc>0) tie=true; });
+    if(best>=0 && bs>=50 && !tie){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='auto'; }
+    else if(best>=0 && bs>=20){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='check'; }
+    else { lvAssign[o.auftragNr]=-1; delete lvAuto[o.auftragNr]; }
+  });
+}
+async function lvSave(){
+  if(!targetDatum) return;
+  try{
+    const db = await rappDb();
+    await new Promise((res,rej)=>{
+      const tx = db.transaction('tage','readwrite');
+      tx.objectStore('tage').put({ files: lvFiles.map(f=>({name:f.name,buf:f.buf,text:f.text,pages:f.pages})), assign: lvAssign, auto: lvAuto }, 'lv:'+rk(targetDatum));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
+    });
+    db.close();
+  }catch(e){ console.warn('LV: nicht gespeichert', e); }
+}
+async function lvLoad(){
+  lvFiles = []; lvAssign = {}; lvAuto = {};
+  if(!targetDatum) return;
+  try{
+    const db = await rappDb();
+    const v = await new Promise((res,rej)=>{ const rq = db.transaction('tage').objectStore('tage').get('lv:'+rk(targetDatum)); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); });
+    db.close();
+    if(v && v.files){ lvFiles = v.files; lvAssign = v.assign||{}; lvAuto = v.auto||{}; }
+  }catch(e){}
+}
+function lvRender(){
+  const items = orders.filter(o=>o.assignedTourId).slice().sort((a,b)=>{
+    const ta = (tours.find(t=>t.id===a.assignedTourId)||{}).name||'', tb = (tours.find(t=>t.id===b.assignedTourId)||{}).name||'';
+    return ta.localeCompare(tb) || timeToMin(a.assignedTime)-timeToMin(b.assignedTime);
+  });
+  const esc = s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let nAuto=0,nCheck=0,nNone=0;
+  const rows = items.map(o=>{
+    const a = lvAssign[o.auftragNr]; const st = lvAuto[o.auftragNr];
+    let badge;
+    if(a>=0 && st==='auto'){ nAuto++; badge='<span class="lv-b lv-ok">✓ automatisch zugeordnet</span>'; }
+    else if(a>=0 && st==='manual'){ nAuto++; badge='<span class="lv-b lv-ok">✓ von Hand gewählt</span>'; }
+    else if(a>=0){ nCheck++; badge='<span class="lv-b lv-wr">⚠ bitte prüfen</span>'; }
+    else if(lvFiles.length){ nNone++; badge='<span class="lv-b lv-no">kein LV</span>'; }
+    else badge='';
+    const opts = '<option value="-1">– kein Leistungsverzeichnis –</option>' + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${esc(f.name)} (${f.pages} S.)</option>`).join('');
+    return `<tr><td><b>${esc(o.auftragNr)}</b></td><td>${esc(o.customerName||'')}<br><span class="muted">${esc([o.street,o.plzOrt].filter(Boolean).join(', '))}</span></td><td><select data-lv="${esc(o.auftragNr)}"${lvFiles.length?'':' disabled'}>${opts}</select></td><td>${badge}</td></tr>`;
+  }).join('');
+  document.getElementById('lvTable').innerHTML = items.length
+    ? `<table class="lv-t"><tr><th>Auftrag</th><th>Kunde / Adresse</th><th>Leistungsverzeichnis</th><th>Zuordnung</th></tr>${rows}</table>`
+    : '<p class="muted">Noch keine Aufträge einer Tour zugeteilt.</p>';
+  document.getElementById('lvSummary').textContent = lvFiles.length
+    ? `${lvFiles.length} PDF${lvFiles.length===1?'':'s'} eingelesen · ${nAuto} zugeordnet · ${nCheck} bitte prüfen · ${nNone} ohne Leistungsverzeichnis`
+    : 'Noch keine Leistungsverzeichnisse eingelesen.';
+  /* Vorschau der Reihenfolge der ersten Tour */
+  const first = items.find(o=>lvAssign[o.auftragNr]>=0);
+  const prev = document.getElementById('lvPreview');
+  if(first){
+    const t = tours.find(x=>x.id===first.assignedTourId);
+    const seq = items.filter(o=>o.assignedTourId===first.assignedTourId).slice(0,4).map(o=>{
+      const f = lvFiles[lvAssign[o.auftragNr]];
+      return `<div class="lv-pg"><b>Rapport ${esc(o.auftragNr)}</b><small>${esc(o.customerName||'')}</small></div>` + (f?`<span class="lv-ar">→</span><div class="lv-pg l"><b>Leistungsverz.</b><small>${esc(f.name)} · ${f.pages} S.</small></div>`:'') + '<span class="lv-ar">→</span>';
+    }).join('').replace(/<span class="lv-ar">→<\/span>$/,'');
+    prev.innerHTML = `So sieht die Rapport-PDF aus (${esc(t?t.name:'Tour')}): zuerst der Auftragsrapport, direkt danach das passende Leistungsverzeichnis.<div class="lv-seq">${seq}</div>`;
+  } else prev.innerHTML = '';
+}
+async function lvAddFiles(list){
+  const files = [...list].filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));
+  if(!files.length) return;
+  document.getElementById('lvSummary').textContent = 'PDFs werden gelesen …';
+  for(const f of files){
+    try{
+      const r = await lvReadFile(f);
+      const ix = lvFiles.findIndex(x=>x.name===r.name);
+      if(ix>=0) lvFiles[ix]=r; else lvFiles.push(r);
+    }catch(e){ console.error(e); toast('«'+f.name+'» konnte nicht gelesen werden','error'); }
+  }
+  lvAutoMatch(true);
+  lvRender(); lvSave();
+}
+function lvOpen(){
+  lvSkip = false;
+  lvRender();
+  document.getElementById('lvModal').classList.add('open');
+  document.getElementById('lvModal').setAttribute('aria-hidden','false');
+  document.getElementById('lvScrim').classList.add('open');
+}
+function lvClose(){
+  document.getElementById('lvModal').classList.remove('open');
+  document.getElementById('lvModal').setAttribute('aria-hidden','true');
+  document.getElementById('lvScrim').classList.remove('open');
+}
+(function lvWire(){
+  const inp = document.getElementById('lvInput'), drop = document.getElementById('lvDrop');
+  inp.addEventListener('change', ()=>{ lvAddFiles(inp.files); inp.value=''; });
+  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ ev.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ ev.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', ev=> lvAddFiles(ev.dataTransfer.files));
+  document.getElementById('lvTable').addEventListener('change', ev=>{
+    const sel = ev.target.closest('select[data-lv]'); if(!sel) return;
+    const v = parseInt(sel.value,10);
+    lvAssign[sel.dataset.lv] = v;
+    if(v>=0) lvAuto[sel.dataset.lv] = 'manual'; else delete lvAuto[sel.dataset.lv];
+    lvRender(); lvSave();
+  });
+  document.getElementById('lvClose').addEventListener('click', lvClose);
+  document.getElementById('lvScrim').addEventListener('click', lvClose);
+  const go = skip=>{
+    const open = orders.filter(o=>!o.assignedTourId).length;
+    if(open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
+    lvSkip = !!skip; lvClose(); sendDispoToBeekeeper();
+  };
+  document.getElementById('lvConfirmBtn').addEventListener('click', ()=>go(false));
+  document.getElementById('lvSkipBtn').addEventListener('click', ()=>go(true));
+})();
+
 function safeFileName(s){ return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim(); }
 function winAnsiText(s){ return String(s).replace(/[\u2010-\u2012]/g,'-').replace(/[^\u0020-\u007e\u00a0-\u00ff\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2022\u2026\u20ac]/g,'?'); }
 async function buildTourRapportePdf(tour){
@@ -3407,9 +3602,9 @@ async function buildTourRapportePdf(tour){
   const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
   const out = await PDFDocument.create();
   const font = await out.embedFont(StandardFonts.HelveticaBold);
-  const srcDocs = {};
+  const srcDocs = {}, lvDocs = {};
   const missing = [];
-  let count = 0;
+  let count = 0, lvCount = 0;
   for(const o of items){
     const src = rapportSrc[o.auftragNr];
     if(!src || !rappFiles[src.fileIdx] || !src.pages.length){ missing.push(o.auftragNr); continue; }
@@ -3425,9 +3620,15 @@ async function buildTourRapportePdf(tour){
       while(size>6 && font.widthOfTextAtSize(name,size) > maxW) size -= 0.5;
       pageByNr[line.page].drawText(name, { x: line.x + 4, y: line.y + 1.8, size, font, color: rgb(0.1,0.1,0.1) });
     }
+    const li = lvSkip ? -1 : lvAssign[o.auftragNr];
+    if(li>=0 && lvFiles[li]){
+      if(!lvDocs[li]) lvDocs[li] = await PDFDocument.load(lvFiles[li].buf.slice(0));
+      const lp = await out.copyPages(lvDocs[li], lvDocs[li].getPageIndices());
+      lp.forEach(pg=>out.addPage(pg)); lvCount++;
+    }
     count++;
   }
-  return { bytes: await out.save(), count, missing };
+  return { bytes: await out.save(), count, missing, lvCount };
 }
 /* Fehlen die Rapporte (z. B. Tagesdispo aus einer älteren Version geladen), fragt die App
    direkt nach den Arbeitsrapport-PDFs, liest sie ein und macht dann mit dem Download weiter. */
@@ -3835,11 +4036,11 @@ function updateDeptUi(){
   const t = document.getElementById('btnReviewNotifyTxt'); if(t) t.textContent = bkSentAt ? 'Angepasste Dispo bestätigen' : 'Dispo bestätigen';
   const h = document.getElementById('notifyCardTitle'); if(h) h.textContent = 'Dispo bestätigen';
 }
-function uhConfirm(){
+async function uhConfirm(){
   if(orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
-  const open = orders.filter(o=>!o.assignedTourId).length;
-  if(open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
-  sendDispoToBeekeeper();
+  await lvLoad();
+  lvAutoMatch(true);
+  lvOpen();
 }
 
 function pendingNotifications(){
