@@ -3448,7 +3448,7 @@ let lvAuto = {};       // auftragNr -> 'auto'|'check'
 let lvSkip = false;
 function lvNorm(s){
   return ' ' + String(s||'').toLowerCase().replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/é|è|ê/g,'e').replace(/à|â/g,'a').replace(/ß/g,'ss')
-    .replace(/\bstr\.(?=\s|$)/g,'strasse').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ') + ' ';
+    .replace(/\bstr\.(?=\s|$)/g,'strasse').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').replace(/(\d) ([a-z])(?= |$)/g,'$1$2') + ' ';
 }
 async function lvReadFile(file){
   const buf = await fileToArrayBuffer(file);
@@ -3490,7 +3490,7 @@ async function lvArchLoad(force){
   if(!DEPT || lvArchBusy) return;
   if(lvArch && !force) return;
   lvArchBusy = true;
-  try{ lvArch = (await sb(`dispo_checklisten?dept=eq.${DEPT}&select=id,customer,street,plz_ort,fname,pages,text_idx,saved_at`)) || []; lvArchAt = Date.now(); }
+  try{ lvArch = (await sb(`dispo_checklisten?dept=eq.${DEPT}&select=id,customer,street,plz_ort,fname,pages,text_idx,saved_at,quelle`)) || []; lvArchAt = Date.now(); }
   catch(e){ console.warn('Checklisten-Ablage nicht erreichbar', e); if(!lvArch) lvArch = []; lvArchAt = Date.now(); }
   lvArchBusy = false;
 }
@@ -3502,7 +3502,7 @@ function lvArchFind(o){
   for(const r of lvArch){
     if(r.id===k) return r;
     const f = r._f || (r._f = { text: [r.customer, r.street, r.plz_ort, r.text_idx, r.fname].join(' ') });
-    const sc = lvScore(o, f);
+    const sc = lvScore(o, f) + (r.quelle==='angebot' ? 0 : 1);
     if(sc>bs){ bs = sc; best = r; }
   }
   return bs>=80 ? best : null;
@@ -3513,7 +3513,7 @@ function lvTagHtml(o){
   if(!lvArchBusy && Date.now()-lvArchAt>120000){ lvArchLoad(true).then(()=>{ try{ renderOrdersList(); }catch(e){} }); }
   const W = DEPT==='uh' ? 'LV' : 'Checkliste';
   const r = lvArchFind(o);
-  return r ? `<span class="lv-tag" title="${W} gespeichert, Stand ${lvFmtDate(r.saved_at)}">✓ ${W} vorhanden</span>` : `<span class="lv-tag n">– keine ${W}</span>`;
+  return r ? `<span class="lv-tag" title="${r.quelle==='angebot'?'Aus dem Angebots-Tool':W+' gespeichert'}, Stand ${lvFmtDate(r.saved_at)}">✓ ${W} vorhanden${r.quelle==='angebot'?' · aus Angebot':''}</span>` : `<span class="lv-tag n">– keine ${W}</span>`;
 }
 async function lvArchBuf(id){
   const rows = await sb(`dispo_checklisten?dept=eq.${DEPT}&id=eq.${encodeURIComponent(id)}&select=data`);
@@ -3523,7 +3523,7 @@ function lvMergeArch(){
   (lvArch||[]).forEach(r=>{
     if(lvFiles.some(f=>f.archId===r.id)) return;
     if(!orders.some(o=>o.assignedTourId && lvArchFind(o)===r)) return;
-    lvFiles.push({ name:r.fname, pages:r.pages, text:[r.customer,r.street,r.plz_ort,r.text_idx].join(' '), archId:r.id, savedAt:r.saved_at, buf:null });
+    lvFiles.push({ name:r.fname, pages:r.pages, text:[r.customer,r.street,r.plz_ort,r.text_idx].join(' '), archId:r.id, savedAt:r.saved_at, quelle:r.quelle, buf:null });
   });
 }
 function lvStrip(files, assign, auto){
@@ -3614,7 +3614,7 @@ function lvRender(){
     const a = lvAssign[o.auftragNr]; const st = lvAuto[o.auftragNr];
     let badge;
     const fsel = a>=0 ? lvFiles[a] : null; const exr = lvArchFind(o);
-    if(fsel && fsel.archId){ nAuto++; badge=`<span class="lv-b lv-ok">✓ gespeichert · Stand ${lvFmtDate(fsel.savedAt)}</span>`; }
+    if(fsel && fsel.archId){ nAuto++; badge=`<span class="lv-b lv-ok">✓ ${fsel.quelle==='angebot'?'aus Angebots-Tool':'gespeichert'} · Stand ${lvFmtDate(fsel.savedAt)}</span>`; }
     else if(fsel && (st==='auto'||st==='manual')){ nAuto++; badge = exr ? `<span class="lv-b lv-rep">↻ ersetzt Stand ${lvFmtDate(exr.saved_at)}</span>` : `<span class="lv-b lv-ok">✓ ${st==='manual'?'von Hand gewählt':'automatisch zugeordnet'} · wird gespeichert</span>`; }
     else if(a>=0){ nCheck++; badge='<span class="lv-b lv-wr">⚠ bitte prüfen</span>'; }
     else if(lvFiles.length){ nNone++; badge=`<span class="lv-b lv-no">keine ${W}</span>`; }
