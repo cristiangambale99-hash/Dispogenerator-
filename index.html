@@ -3510,6 +3510,7 @@ async function lvLoad(){
   }catch(e){}
 }
 function lvRender(){
+  const W = DEPT==='uh' ? 'Leistungsverzeichnis' : 'Checkliste';
   const items = orders.filter(o=>o.assignedTourId).slice().sort((a,b)=>{
     const ta = (tours.find(t=>t.id===a.assignedTourId)||{}).name||'', tb = (tours.find(t=>t.id===b.assignedTourId)||{}).name||'';
     return ta.localeCompare(tb) || timeToMin(a.assignedTime)-timeToMin(b.assignedTime);
@@ -3522,17 +3523,17 @@ function lvRender(){
     if(a>=0 && st==='auto'){ nAuto++; badge='<span class="lv-b lv-ok">✓ automatisch zugeordnet</span>'; }
     else if(a>=0 && st==='manual'){ nAuto++; badge='<span class="lv-b lv-ok">✓ von Hand gewählt</span>'; }
     else if(a>=0){ nCheck++; badge='<span class="lv-b lv-wr">⚠ bitte prüfen</span>'; }
-    else if(lvFiles.length){ nNone++; badge='<span class="lv-b lv-no">kein LV</span>'; }
+    else if(lvFiles.length){ nNone++; badge=`<span class="lv-b lv-no">keine ${W}</span>`; }
     else badge='';
-    const opts = '<option value="-1">– kein Leistungsverzeichnis –</option>' + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${esc(f.name)} (${f.pages} S.)</option>`).join('');
+    const opts = `<option value="-1">– keine ${W} –</option>` + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${esc(f.name)} (${f.pages} S.)</option>`).join('');
     return `<tr><td><b>${esc(o.auftragNr)}</b></td><td>${esc(o.customerName||'')}<br><span class="muted">${esc([o.street,o.plzOrt].filter(Boolean).join(', '))}</span></td><td><select data-lv="${esc(o.auftragNr)}"${lvFiles.length?'':' disabled'}>${opts}</select></td><td>${badge}</td></tr>`;
   }).join('');
   document.getElementById('lvTable').innerHTML = items.length
-    ? `<table class="lv-t"><tr><th>Auftrag</th><th>Kunde / Adresse</th><th>Leistungsverzeichnis</th><th>Zuordnung</th></tr>${rows}</table>`
+    ? `<table class="lv-t"><tr><th>Auftrag</th><th>Kunde / Adresse</th><th>${W}</th><th>Zuordnung</th></tr>${rows}</table>`
     : '<p class="muted">Noch keine Aufträge einer Tour zugeteilt.</p>';
   document.getElementById('lvSummary').textContent = lvFiles.length
-    ? `${lvFiles.length} PDF${lvFiles.length===1?'':'s'} eingelesen · ${nAuto} zugeordnet · ${nCheck} bitte prüfen · ${nNone} ohne Leistungsverzeichnis`
-    : 'Noch keine Leistungsverzeichnisse eingelesen.';
+    ? `${lvFiles.length} PDF${lvFiles.length===1?'':'s'} eingelesen · ${nAuto} zugeordnet · ${nCheck} bitte prüfen · ${nNone} ohne ${W}`
+    : `Noch keine ${W==='Checkliste'?'Checklisten':'Leistungsverzeichnisse'} eingelesen.`;
   /* Vorschau der Reihenfolge der ersten Tour */
   const first = items.find(o=>lvAssign[o.auftragNr]>=0);
   const prev = document.getElementById('lvPreview');
@@ -3540,9 +3541,9 @@ function lvRender(){
     const t = tours.find(x=>x.id===first.assignedTourId);
     const seq = items.filter(o=>o.assignedTourId===first.assignedTourId).slice(0,4).map(o=>{
       const f = lvFiles[lvAssign[o.auftragNr]];
-      return `<div class="lv-pg"><b>Rapport ${esc(o.auftragNr)}</b><small>${esc(o.customerName||'')}</small></div>` + (f?`<span class="lv-ar">→</span><div class="lv-pg l"><b>Leistungsverz.</b><small>${esc(f.name)} · ${f.pages} S.</small></div>`:'') + '<span class="lv-ar">→</span>';
+      return `<div class="lv-pg"><b>Rapport ${esc(o.auftragNr)}</b><small>${esc(o.customerName||'')}</small></div>` + (f?`<span class="lv-ar">→</span><div class="lv-pg l"><b>${W==='Checkliste'?'Checkliste':'Leistungsverz.'}</b><small>${esc(f.name)} · ${f.pages} S.</small></div>`:'') + '<span class="lv-ar">→</span>';
     }).join('').replace(/<span class="lv-ar">→<\/span>$/,'');
-    prev.innerHTML = `So sieht die Rapport-PDF aus (${esc(t?t.name:'Tour')}): zuerst der Auftragsrapport, direkt danach das passende Leistungsverzeichnis.<div class="lv-seq">${seq}</div>`;
+    prev.innerHTML = `So sieht die Rapport-PDF aus (${esc(t?t.name:'Tour')}): zuerst der Auftragsrapport, direkt danach die passende ${W}.<div class="lv-seq">${seq}</div>`;
   } else prev.innerHTML = '';
 }
 async function lvAddFiles(list){
@@ -3561,6 +3562,12 @@ async function lvAddFiles(list){
 }
 function lvOpen(){
   lvSkip = false;
+  const pf = DEPT!=='uh';
+  document.getElementById('lvModalTitle').textContent = pf ? 'Checklisten hinzufügen' : 'Leistungsverzeichnisse hinzufügen';
+  document.querySelector('#lvDrop b').textContent = pf ? 'Alle Checklisten-PDFs hier ablegen oder auswählen' : 'Alle Leistungsverzeichnis-PDFs hier ablegen oder auswählen';
+  document.getElementById('lvConfirmBtn').textContent = pf ? 'Weiter zur Zeitmitteilung' : 'Dispo bestätigen';
+  document.getElementById('lvSkipBtn').textContent = pf ? 'Ohne Checklisten weiter' : 'Ohne Leistungsverzeichnisse bestätigen';
+  document.querySelector('#lvModal .eyebrow').textContent = pf ? 'Putzfrauenservice' : 'Unterhaltsreinigung';
   lvRender();
   document.getElementById('lvModal').classList.add('open');
   document.getElementById('lvModal').setAttribute('aria-hidden','false');
@@ -3588,8 +3595,9 @@ function lvClose(){
   document.getElementById('lvScrim').addEventListener('click', lvClose);
   const go = skip=>{
     const open = orders.filter(o=>!o.assignedTourId).length;
-    if(open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
-    lvSkip = !!skip; lvClose(); sendDispoToBeekeeper();
+    if(DEPT==='uh' && open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
+    lvSkip = !!skip; lvClose();
+    if(DEPT==='uh') sendDispoToBeekeeper(); else openNotifyModal();
   };
   document.getElementById('lvConfirmBtn').addEventListener('click', ()=>go(false));
   document.getElementById('lvSkipBtn').addEventListener('click', ()=>go(true));
@@ -4037,7 +4045,7 @@ function updateDeptUi(){
   const h = document.getElementById('notifyCardTitle'); if(h) h.textContent = 'Dispo bestätigen';
 }
 async function uhConfirm(){
-  if(orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
+  if(DEPT==='uh' && orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
   await lvLoad();
   lvAutoMatch(true);
   lvOpen();
@@ -4180,12 +4188,16 @@ function retryAllFailed(){
 
 document.getElementById('btnReviewNotify').addEventListener('click', ()=>{
   if(DEPT==='uh'){ uhConfirm(); return; }
+  if(orders.some(o=>o.assignedTourId)){ uhConfirm(); return; }
+  openNotifyModal();
+});
+function openNotifyModal(){
   notifyBatch = null;
   renderNotifyList();
   document.getElementById('notifyModal').classList.add('open');
   document.getElementById('notifyModal').setAttribute('aria-hidden','false');
   document.getElementById('notifyScrim').classList.add('open');
-});
+}
 function closeNotifyModal(){
   document.getElementById('notifyModal').classList.remove('open');
   document.getElementById('notifyModal').setAttribute('aria-hidden','true');
