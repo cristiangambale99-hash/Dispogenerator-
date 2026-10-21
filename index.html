@@ -896,6 +896,7 @@ table.lv-t td{padding:9px 10px;border-bottom:1px solid #eef4f6;font-size:13px;ve
 table.lv-t select{border:1px solid #c5dde1;border-radius:8px;padding:5px 8px;font:inherit;font-size:12.5px;background:#fff;max-width:260px}
 .lv-b{border-radius:99px;padding:3px 10px;font-size:11.5px;white-space:nowrap}
 .lv-ok{background:#e3f5f3;color:#1b6a52}.lv-wr{background:#fde7cd;color:#8a4a00}.lv-no{background:#fbe3e0;color:#a33a31}
+.lv-tag{display:inline-flex;align-items:center;border-radius:99px;padding:2px 9px;font-size:11px;background:#e3f5f3;color:#1b6a52;white-space:nowrap;font-weight:500}.lv-tag.n{background:#f1f3f4;color:#767676}.lv-rep{background:#eaf3fb;color:#24577a}
 .lv-prev{margin-top:16px;font-size:12px;color:#767676}
 .lv-seq{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:8px}
 .lv-pg{border:1px solid #dbe9ec;border-radius:8px;padding:7px 10px;background:#fff;font-size:11.5px;min-width:110px;border-left:4px solid #2BB6B7;color:#3C3C3B}
@@ -2086,6 +2087,7 @@ function cloudInit(){
 
 let targetDatum = null;
 let orders = [];          // aktive Aufträge (ohne Abwesenheiten)
+let lvArch = null, lvArchBusy = false, lvArchAt = 0, lvLoadedDatum = null;   // gespeicherte Checklisten/LV je Kunde (Cloud)
 let absenceOrders = [];
 let tours = [];
 let probes = {};        // {tourId:{name,phone}} Probedame je Tour (nur für diesen Tag)
@@ -3085,6 +3087,7 @@ function renderOrdersList(){
     const tr = document.createElement('tr');
     tr.setAttribute('aria-selected', o.auftragNr===selectedAuftragNr ? 'true':'false');
     tr.innerHTML = `<td class="name">${o.auftragNr}</td><td>${o.customerName ? o.customerName+'<br><span class="muted" style="font-weight:400">'+o.address+'</span>' : o.address}</td><td class="num">${o.aufwand!=null ? fmtHoursShort(o.aufwand*60) : '–'}</td><td style="text-align:center"></td><td style="text-align:center"></td><td>${statusBadge(o)}</td><td style="text-align:center"></td>`;
+    { const t = lvTagHtml(o); if(t) tr.children[1].insertAdjacentHTML('beforeend', '<div style="margin-top:5px">'+t+'</div>'); }
     tr.addEventListener('click', ()=> openOrderPanel(o.auftragNr));
     tr.children[3].appendChild(keyToggleEl(o));
     tr.children[4].appendChild(uhToggleEl(o));
@@ -3094,6 +3097,7 @@ function renderOrdersList(){
     const row = document.createElement('div');
     row.className='mrow';
     row.innerHTML = `<div class="tx"><b>${o.auftragNr} · ${o.customerName || o.address.split(',')[0]}</b><small>${o.address}</small></div>`;
+    { const t = lvTagHtml(o); if(t) row.querySelector('.tx').insertAdjacentHTML('beforeend', '<div style="margin-top:3px">'+t+'</div>'); }
     row.appendChild(keyToggleEl(o));
     row.appendChild(uhToggleEl(o));
     const statusWrap = document.createElement('span');
@@ -3460,7 +3464,7 @@ async function lvReadFile(file){
 function lvScore(o, f){
   const T = f._n || (f._n = lvNorm(f.text));
   let sc = 0;
-  if(o.auftragNr && T.includes(String(o.auftragNr))) sc += 100;
+  if(o.auftragNr && String(o.auftragNr).length>=5 && T.includes(' '+String(o.auftragNr)+' ')) sc += 100;
   const st = lvNorm(String(o.street||'').split(',').pop());
   const stNo = st.trim().replace(/ \d+[a-z]?( [a-z])?$/,'');
   if(st.trim().length>4 && T.includes(st)) sc += 40;
@@ -3476,13 +3480,101 @@ function lvScore(o, f){
   }
   return sc;
 }
+/* ---- Gespeicherte Checklisten/LV je Kunde (Cloud, Tabelle dispo_checklisten) ---- */
+function lvKey(o){
+  const plz = (String(o.plzOrt||'').match(/^\d{4}/)||[''])[0];
+  return (lvNorm(o.customerName).trim()+'|'+lvNorm(String(o.street||'').split(',').pop()).trim()+'|'+plz).slice(0,200);
+}
+function lvFmtDate(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+async function lvArchLoad(force){
+  if(!DEPT || lvArchBusy) return;
+  if(lvArch && !force) return;
+  lvArchBusy = true;
+  try{ lvArch = (await sb(`dispo_checklisten?dept=eq.${DEPT}&select=id,customer,street,plz_ort,fname,pages,text_idx,saved_at`)) || []; lvArchAt = Date.now(); }
+  catch(e){ console.warn('Checklisten-Ablage nicht erreichbar', e); if(!lvArch) lvArch = []; lvArchAt = Date.now(); }
+  lvArchBusy = false;
+}
+/* Treffer nur bei gleichem Kunden-Schlüssel oder Name UND Strasse (Adresse allein reicht nicht:
+   am selben Ort kann ein anderer Kunde wohnen). */
+function lvArchFind(o){
+  if(!lvArch || !lvArch.length) return null;
+  const k = lvKey(o); let best = null, bs = 0;
+  for(const r of lvArch){
+    if(r.id===k) return r;
+    const f = r._f || (r._f = { text: [r.customer, r.street, r.plz_ort, r.text_idx, r.fname].join(' ') });
+    const sc = lvScore(o, f);
+    if(sc>bs){ bs = sc; best = r; }
+  }
+  return bs>=80 ? best : null;
+}
+function lvTagHtml(o){
+  if(!DEPT) return '';
+  if(lvArch===null){ if(!lvArchBusy) lvArchLoad().then(()=>{ try{ renderOrdersList(); }catch(e){} }); return ''; }
+  if(!lvArchBusy && Date.now()-lvArchAt>120000){ lvArchLoad(true).then(()=>{ try{ renderOrdersList(); }catch(e){} }); }
+  const W = DEPT==='uh' ? 'LV' : 'Checkliste';
+  const r = lvArchFind(o);
+  return r ? `<span class="lv-tag" title="${W} gespeichert, Stand ${lvFmtDate(r.saved_at)}">✓ ${W} vorhanden</span>` : `<span class="lv-tag n">– keine ${W}</span>`;
+}
+async function lvArchBuf(id){
+  const rows = await sb(`dispo_checklisten?dept=eq.${DEPT}&id=eq.${encodeURIComponent(id)}&select=data`);
+  return rows && rows[0] && rows[0].data ? base64ToArrayBuffer(rows[0].data) : null;
+}
+function lvMergeArch(){
+  (lvArch||[]).forEach(r=>{
+    if(lvFiles.some(f=>f.archId===r.id)) return;
+    if(!orders.some(o=>o.assignedTourId && lvArchFind(o)===r)) return;
+    lvFiles.push({ name:r.fname, pages:r.pages, text:[r.customer,r.street,r.plz_ort,r.text_idx].join(' '), archId:r.id, savedAt:r.saved_at, buf:null });
+  });
+}
+function lvStrip(files, assign, auto){
+  const map = {}, nf = [];
+  files.forEach((f,i)=>{ if(!f.archId){ map[i] = nf.length; nf.push(f); } });
+  const na = {}, nu = {};
+  for(const k in assign){ const v = assign[k]; if(v>=0 && map[v]!==undefined){ na[k] = map[v]; if(auto[k]) nu[k] = auto[k]; } else na[k] = -1; }
+  return { files:nf, assign:na, auto:nu };
+}
+async function lvPrepare(force){
+  await lvLoad();
+  await lvArchLoad(force);
+  lvMergeArch();
+  lvAutoMatch(true);
+  lvLoadedDatum = targetDatum;
+}
+/* Beim Bestätigen: neu eingefügte Dateien als Checkliste des Kunden speichern (ersetzt die alte, die alte bleibt als Sicherung). */
+async function lvSaveToArchive(){
+  if(!DEPT) return;
+  let n = 0, rep = 0;
+  for(const o of orders.filter(x=>x.assignedTourId)){
+    const a = lvAssign[o.auftragNr]; const f = a>=0 ? lvFiles[a] : null;
+    if(!f || f.archId || !f.buf || lvAuto[o.auftragNr]==='check') continue;
+    try{
+      const id = lvKey(o); if(!id.replace(/\|/g,'')) continue;
+      const ex = await sb(`dispo_checklisten?dept=eq.${DEPT}&id=eq.${encodeURIComponent(id)}&select=data,fname,saved_at`);
+      const data = arrayBufferToBase64(f.buf);
+      if(ex && ex[0] && ex[0].data===data) continue;
+      const row = { dept:DEPT, id, customer:o.customerName||'', street:o.street||'', plz_ort:o.plzOrt||'', fname:f.name, pages:f.pages,
+        text_idx:String(f.text||'').slice(0,6000), data, saved_at:new Date().toISOString() };
+      if(ex && ex[0]){ row.prev_data = ex[0].data; row.prev_fname = ex[0].fname; row.prev_saved_at = ex[0].saved_at; rep++; }
+      await sb('dispo_checklisten?on_conflict=dept,id', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
+      n++;
+    }catch(e){ console.warn('Checkliste nicht gespeichert', e); }
+  }
+  if(n){
+    await lvArchLoad(true); try{ renderOrdersList(); }catch(e){}
+    const W = DEPT==='uh' ? 'Leistungsverzeichnis' : 'Checkliste';
+    toast(rep ? `${n} ${W}${n===1?'':(DEPT==='uh'?'se':'n')} gespeichert (${rep} ersetzt)` : `${n} ${W}${n===1?'':(DEPT==='uh'?'se':'n')} für künftige Dispos gespeichert`, 'check');
+  }
+}
 function lvAutoMatch(keepManual){
   const items = orders.filter(o=>o.assignedTourId);
   items.forEach(o=>{
     if(keepManual && lvAuto[o.auftragNr]==='manual') return;
     let best=-1, bs=0, tie=false;
-    lvFiles.forEach((f,i)=>{ const sc = lvScore(o,f); if(sc>bs){ bs=sc; best=i; tie=false; } else if(sc===bs && sc>0) tie=true; });
-    if(best>=0 && bs>=50 && !tie){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='auto'; }
+    lvFiles.forEach((f,i)=>{ let sc;
+      if(f.archId){ const r = lvArchFind(o); if(!r || r.id!==f.archId) return; sc = 60; }
+      else { sc = lvScore(o,f); if(sc>=80) sc += 1000; }
+      if(sc>bs){ bs=sc; best=i; tie=false; } else if(sc===bs && sc>0) tie=true; });
+    if(best>=0 && bs>=80 && !tie){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='auto'; }
     else if(best>=0 && bs>=20){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='check'; }
     else { lvAssign[o.auftragNr]=-1; delete lvAuto[o.auftragNr]; }
   });
@@ -3493,7 +3585,8 @@ async function lvSave(){
     const db = await rappDb();
     await new Promise((res,rej)=>{
       const tx = db.transaction('tage','readwrite');
-      tx.objectStore('tage').put({ files: lvFiles.map(f=>({name:f.name,buf:f.buf,text:f.text,pages:f.pages})), assign: lvAssign, auto: lvAuto }, 'lv:'+rk(targetDatum));
+      const st = lvStrip(lvFiles, lvAssign, lvAuto);
+      tx.objectStore('tage').put({ files: st.files.map(f=>({name:f.name,buf:f.buf,text:f.text,pages:f.pages})), assign: st.assign, auto: st.auto }, 'lv:'+rk(targetDatum));
       tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
     });
     db.close();
@@ -3506,7 +3599,7 @@ async function lvLoad(){
     const db = await rappDb();
     const v = await new Promise((res,rej)=>{ const rq = db.transaction('tage').objectStore('tage').get('lv:'+rk(targetDatum)); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); });
     db.close();
-    if(v && v.files){ lvFiles = v.files; lvAssign = v.assign||{}; lvAuto = v.auto||{}; }
+    if(v && v.files){ const st = lvStrip(v.files, v.assign||{}, v.auto||{}); lvFiles = st.files; lvAssign = st.assign; lvAuto = st.auto; }
   }catch(e){}
 }
 function lvRender(){
@@ -3520,12 +3613,13 @@ function lvRender(){
   const rows = items.map(o=>{
     const a = lvAssign[o.auftragNr]; const st = lvAuto[o.auftragNr];
     let badge;
-    if(a>=0 && st==='auto'){ nAuto++; badge='<span class="lv-b lv-ok">✓ automatisch zugeordnet</span>'; }
-    else if(a>=0 && st==='manual'){ nAuto++; badge='<span class="lv-b lv-ok">✓ von Hand gewählt</span>'; }
+    const fsel = a>=0 ? lvFiles[a] : null; const exr = lvArchFind(o);
+    if(fsel && fsel.archId){ nAuto++; badge=`<span class="lv-b lv-ok">✓ gespeichert · Stand ${lvFmtDate(fsel.savedAt)}</span>`; }
+    else if(fsel && (st==='auto'||st==='manual')){ nAuto++; badge = exr ? `<span class="lv-b lv-rep">↻ ersetzt Stand ${lvFmtDate(exr.saved_at)}</span>` : `<span class="lv-b lv-ok">✓ ${st==='manual'?'von Hand gewählt':'automatisch zugeordnet'} · wird gespeichert</span>`; }
     else if(a>=0){ nCheck++; badge='<span class="lv-b lv-wr">⚠ bitte prüfen</span>'; }
     else if(lvFiles.length){ nNone++; badge=`<span class="lv-b lv-no">keine ${W}</span>`; }
     else badge='';
-    const opts = `<option value="-1">– keine ${W} –</option>` + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${esc(f.name)} (${f.pages} S.)</option>`).join('');
+    const opts = `<option value="-1">– keine ${W} –</option>` + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${f.archId?'Gespeichert: ':''}${esc(f.name)} (${f.pages} S.)</option>`).join('');
     return `<tr><td><b>${esc(o.auftragNr)}</b></td><td>${esc(o.customerName||'')}<br><span class="muted">${esc([o.street,o.plzOrt].filter(Boolean).join(', '))}</span></td><td><select data-lv="${esc(o.auftragNr)}"${lvFiles.length?'':' disabled'}>${opts}</select></td><td>${badge}</td></tr>`;
   }).join('');
   document.getElementById('lvTable').innerHTML = items.length
@@ -3597,6 +3691,7 @@ function lvClose(){
     const open = orders.filter(o=>!o.assignedTourId).length;
     if(DEPT==='uh' && open>0 && !confirm(open + (open===1 ? ' Auftrag ist' : ' Aufträge sind') + ' noch nicht zugeteilt. Trotzdem senden?')) return;
     lvSkip = !!skip; lvClose();
+    if(!skip) lvSaveToArchive();
     if(DEPT==='uh') sendDispoToBeekeeper(); else openNotifyModal();
   };
   document.getElementById('lvConfirmBtn').addEventListener('click', ()=>go(false));
@@ -3607,6 +3702,7 @@ function safeFileName(s){ return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace
 function winAnsiText(s){ return String(s).replace(/[\u2010-\u2012]/g,'-').replace(/[^\u0020-\u007e\u00a0-\u00ff\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2022\u2026\u20ac]/g,'?'); }
 async function buildTourRapportePdf(tour){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  if(!lvSkip && lvLoadedDatum!==targetDatum){ try{ await lvPrepare(false); }catch(e){ console.warn(e); } }
   const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
   const out = await PDFDocument.create();
   const font = await out.embedFont(StandardFonts.HelveticaBold);
@@ -3629,7 +3725,8 @@ async function buildTourRapportePdf(tour){
       pageByNr[line.page].drawText(name, { x: line.x + 4, y: line.y + 1.8, size, font, color: rgb(0.1,0.1,0.1) });
     }
     const li = lvSkip ? -1 : lvAssign[o.auftragNr];
-    if(li>=0 && lvFiles[li]){
+    if(li>=0 && lvFiles[li] && !lvFiles[li].buf && lvFiles[li].archId){ try{ lvFiles[li].buf = await lvArchBuf(lvFiles[li].archId); }catch(e){ console.warn(e); } }
+    if(li>=0 && lvFiles[li] && lvFiles[li].buf){
       if(!lvDocs[li]) lvDocs[li] = await PDFDocument.load(lvFiles[li].buf.slice(0));
       const lp = await out.copyPages(lvDocs[li], lvDocs[li].getPageIndices());
       lp.forEach(pg=>out.addPage(pg)); lvCount++;
@@ -4036,7 +4133,7 @@ async function sendDispoToBeekeeper(){
     console.error(err);
     bkSetStatus(`<span style="color:#b84a3e;font-weight:600">✗ Beekeeper-Versand fehlgeschlagen:</span> ${String(err.message||err)} <button type="button" class="btn btn-s" id="bkRetry" style="padding:3px 10px;font-size:12px;margin-left:8px">Erneut senden</button>`);
     const b = document.getElementById('bkRetry'); if(b) b.addEventListener('click', ()=> sendDispoToBeekeeper());
-  }finally{ bkBusy = false; try{ updateDeptUi(); }catch(e){} }
+  }finally{ bkBusy = false; lvSkip = false; try{ updateDeptUi(); }catch(e){} }
 }
 
 function updateDeptUi(){
@@ -4046,8 +4143,7 @@ function updateDeptUi(){
 }
 async function uhConfirm(){
   if(DEPT==='uh' && orders.length===0){ toast('Bitte zuerst Aufträge einlesen', 'warning'); return; }
-  await lvLoad();
-  lvAutoMatch(true);
+  await lvPrepare(true);
   lvOpen();
 }
 
