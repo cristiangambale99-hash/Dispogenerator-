@@ -3712,6 +3712,22 @@ function lvClose(){
 
 function safeFileName(s){ return String(s).replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim(); }
 function winAnsiText(s){ return String(s).replace(/[\u2010-\u2012]/g,'-').replace(/[^\u0020-\u007e\u00a0-\u00ff\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2022\u2026\u20ac]/g,'?'); }
+/* Das zweite Blatt jedes Arbeitsrapports ("Zeiten" – Stunden von Hand eintragen) wird
+   nicht mehr gebraucht und fällt aus der Tour-PDF. Erkannt wird es am Inhalt, nicht an der Position. */
+async function rappIsZeitblatt(fileIdx, pageNo){
+  const f = rappFiles[fileIdx];
+  if(!f) return false;
+  const cache = f._zeit || (f._zeit = {});
+  if(pageNo in cache) return cache[pageNo];
+  let res = false;
+  try{
+    if(!f._pdfjs) f._pdfjs = await loadPdf(f.buf.slice(0));
+    const pg = await f._pdfjs.getPage(pageNo);
+    const txt = (await pg.getTextContent()).items.map(i=>i.str).join(' ').replace(/\s+/g,' ');
+    res = /\bZeiten\b/.test(txt) && /Mitarbeiter\s+Datum\s+Von\s+Bis/.test(txt) && !/Adresse \(Objekt/.test(txt);
+  }catch(e){ console.warn('Zeitblatt-Erkennung', e); }
+  return (cache[pageNo] = res);
+}
 async function buildTourRapportePdf(tour){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   if(!lvSkip && lvLoadedDatum!==targetDatum){ try{ await lvPrepare(false); }catch(e){ console.warn(e); } }
@@ -3725,9 +3741,13 @@ async function buildTourRapportePdf(tour){
     const src = rapportSrc[o.auftragNr];
     if(!src || !rappFiles[src.fileIdx] || !src.pages.length){ missing.push(o.auftragNr); continue; }
     if(!srcDocs[src.fileIdx]) srcDocs[src.fileIdx] = await PDFDocument.load(rappFiles[src.fileIdx].buf.slice(0));
-    const copied = await out.copyPages(srcDocs[src.fileIdx], src.pages.slice().sort((a,b)=>a-b).map(n=>n-1));
+    const sorted = src.pages.slice().sort((a,b)=>a-b);
+    const keep = [];
+    for(const n of sorted){ if(!(await rappIsZeitblatt(src.fileIdx, n))) keep.push(n); }
+    if(!keep.length) keep.push(sorted[0]);
+    const copied = await out.copyPages(srcDocs[src.fileIdx], keep.map(n=>n-1));
     const pageByNr = {};
-    copied.forEach((pg,i)=>{ out.addPage(pg); pageByNr[src.pages.slice().sort((a,b)=>a-b)[i]] = pg; });
+    copied.forEach((pg,i)=>{ out.addPage(pg); pageByNr[keep[i]] = pg; });
     const line = src.lines.find(l=>l.datum===targetDatum) || src.lines[0];
     if(line && pageByNr[line.page]){
       const name = winAnsiText(tour.name);
