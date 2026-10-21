@@ -3461,29 +3461,41 @@ async function lvReadFile(file){
   /* Dateiname zählt mit (oft "LV_Kunde_Ort.pdf") */
   return { name:file.name, buf, text: text + ' ' + file.name.replace(/\.pdf$/i,'').replace(/[_-]+/g,' '), pages: doc.numPages };
 }
+/* Aufträge tragen die Adresse als ein Feld ("Strasse, PLZ Ort", teils mit Namen dazwischen).
+   Hier wird sie in Strasse und PLZ/Ort zerlegt. */
+function lvAddr(o){
+  if(o.street || o.plzOrt) return { street: String(o.street||'').split(',').pop().trim(), plzOrt: String(o.plzOrt||'').trim() };
+  const parts = String(o.address||'').split(',').map(x=>x.trim()).filter(Boolean);
+  let pi = -1; for(let i=parts.length-1;i>=0;i--){ if(/^\d{4}\b/.test(parts[i])){ pi = i; break; } }
+  const plzOrt = pi>=0 ? parts[pi] : '';
+  const rest = pi>=0 ? parts.slice(0,pi) : parts;
+  const street = rest.find(x=>/\d/.test(x)) || rest[0] || '';
+  return { street, plzOrt };
+}
 function lvScore(o, f){
+  const A = lvAddr(o);
   const T = f._n || (f._n = lvNorm(f.text));
   let sc = 0;
   if(o.auftragNr && String(o.auftragNr).length>=5 && T.includes(' '+String(o.auftragNr)+' ')) sc += 100;
-  const st = lvNorm(String(o.street||'').split(',').pop());
+  const st = lvNorm(A.street);
   const stNo = st.trim().replace(/ \d+[a-z]?( [a-z])?$/,'');
   if(st.trim().length>4 && T.includes(st)) sc += 40;
   else if(stNo.length>4 && T.includes(' '+stNo+' ')) sc += 15;
-  const plz = (String(o.plzOrt||'').match(/^\d{4}/)||[])[0];
+  const plz = (A.plzOrt.match(/^\d{4}/)||[])[0];
   if(plz && T.includes(' '+plz+' ')) sc += 10;
-  const ort = lvNorm(String(o.plzOrt||'').replace(/^\d{4}\s*/,'')).trim();
+  const ort = lvNorm(A.plzOrt.replace(/^\d{4}\s*/,'')).trim();
   if(ort.length>2 && T.includes(' '+ort+' ')) sc += 5;
   const toks = lvNorm(o.customerName).trim().split(' ').filter(t=>t.length>2 && !/^(herr|frau|familie|firma|und|ag|gmbh)$/.test(t));
   if(toks.length){
     const hit = toks.filter(t=>T.includes(' '+t+' ')||T.includes(t)).length;
-    if(hit===toks.length) sc += 40; else if(hit>0 && toks.length>1 && T.includes(toks[toks.length-1])) sc += 20;
+    if(hit===toks.length) sc += 40; else if(hit>0 && toks.length>1 && T.includes(' '+toks[toks.length-1]+' ')) sc += 30;
   }
   return sc;
 }
 /* ---- Gespeicherte Checklisten/LV je Kunde (Cloud, Tabelle dispo_checklisten) ---- */
 function lvKey(o){
-  const plz = (String(o.plzOrt||'').match(/^\d{4}/)||[''])[0];
-  return (lvNorm(o.customerName).trim()+'|'+lvNorm(String(o.street||'').split(',').pop()).trim()+'|'+plz).slice(0,200);
+  const A = lvAddr(o); const plz = (A.plzOrt.match(/^\d{4}/)||[''])[0];
+  return (lvNorm(o.customerName).trim()+'|'+lvNorm(A.street).trim()+'|'+plz).slice(0,200);
 }
 function lvFmtDate(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 async function lvArchLoad(force){
@@ -3552,7 +3564,7 @@ async function lvSaveToArchive(){
       const ex = await sb(`dispo_checklisten?dept=eq.${DEPT}&id=eq.${encodeURIComponent(id)}&select=data,fname,saved_at`);
       const data = arrayBufferToBase64(f.buf);
       if(ex && ex[0] && ex[0].data===data) continue;
-      const row = { dept:DEPT, id, customer:o.customerName||'', street:o.street||'', plz_ort:o.plzOrt||'', fname:f.name, pages:f.pages,
+      const row = { dept:DEPT, id, customer:o.customerName||'', street:lvAddr(o).street, plz_ort:lvAddr(o).plzOrt, fname:f.name, pages:f.pages,
         text_idx:String(f.text||'').slice(0,6000), data, saved_at:new Date().toISOString() };
       if(ex && ex[0]){ row.prev_data = ex[0].data; row.prev_fname = ex[0].fname; row.prev_saved_at = ex[0].saved_at; rep++; }
       await sb('dispo_checklisten?on_conflict=dept,id', { method:'POST', headers:{ Prefer:'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
@@ -3620,7 +3632,7 @@ function lvRender(){
     else if(lvFiles.length){ nNone++; badge=`<span class="lv-b lv-no">keine ${W}</span>`; }
     else badge='';
     const opts = `<option value="-1">– keine ${W} –</option>` + lvFiles.map((f,i)=>`<option value="${i}"${a===i?' selected':''}>${f.archId?'Gespeichert: ':''}${esc(f.name)} (${f.pages} S.)</option>`).join('');
-    return `<tr><td><b>${esc(o.auftragNr)}</b></td><td>${esc(o.customerName||'')}<br><span class="muted">${esc([o.street,o.plzOrt].filter(Boolean).join(', '))}</span></td><td><select data-lv="${esc(o.auftragNr)}"${lvFiles.length?'':' disabled'}>${opts}</select></td><td>${badge}</td></tr>`;
+    return `<tr><td><b>${esc(o.auftragNr)}</b></td><td>${esc(o.customerName||'')}<br><span class="muted">${esc(o.address || [o.street,o.plzOrt].filter(Boolean).join(', '))}</span></td><td><select data-lv="${esc(o.auftragNr)}"${lvFiles.length?'':' disabled'}>${opts}</select></td><td>${badge}</td></tr>`;
   }).join('');
   document.getElementById('lvTable').innerHTML = items.length
     ? `<table class="lv-t"><tr><th>Auftrag</th><th>Kunde / Adresse</th><th>${W}</th><th>Zuordnung</th></tr>${rows}</table>`
