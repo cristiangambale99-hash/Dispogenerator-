@@ -3453,13 +3453,14 @@ function lvNorm(s){
 async function lvReadFile(file){
   const buf = await fileToArrayBuffer(file);
   const doc = await loadPdf(buf.slice(0));
-  let text = '';
+  let text = ''; const pageTexts = [];
   for(let p=1;p<=doc.numPages;p++){
     const pg = await doc.getPage(p); const c = await pg.getTextContent();
-    text += c.items.map(i=>i.str).join(' ') + '\n';
+    const t = c.items.map(i=>i.str).join(' ');
+    pageTexts.push(t); text += t + '\n';
   }
   /* Dateiname zählt mit (oft "LV_Kunde_Ort.pdf") */
-  return { name:file.name, buf, text: text + ' ' + file.name.replace(/\.pdf$/i,'').replace(/[_-]+/g,' '), pages: doc.numPages };
+  return { name:file.name, buf, text: text + ' ' + file.name.replace(/\.pdf$/i,'').replace(/[_-]+/g,' '), pages: doc.numPages, pageTexts };
 }
 /* Aufträge tragen die Adresse als ein Feld ("Strasse, PLZ Ort", teils mit Namen dazwischen).
    Hier wird sie in Strasse und PLZ/Ort zerlegt. */
@@ -3584,6 +3585,7 @@ function lvAutoMatch(keepManual){
     let best=-1, bs=0, tie=false;
     lvFiles.forEach((f,i)=>{ let sc;
       if(f.archId){ const r = lvArchFind(o); if(!r || r.id!==f.archId) return; sc = 60; }
+      else if(f.hintKey!==undefined){ if(f.hintKey===null) sc = Math.min(lvScore(o,f), 79); else if(f.hintKey===lvKey(o)) sc = 1085; else return; }
       else { sc = lvScore(o,f); if(sc>=80) sc += 1000; }
       if(sc>bs){ bs=sc; best=i; tie=false; } else if(sc===bs && sc>0) tie=true; });
     if(best>=0 && bs>=80 && !tie){ lvAssign[o.auftragNr]=best; lvAuto[o.auftragNr]='auto'; }
@@ -3598,7 +3600,7 @@ async function lvSave(){
     await new Promise((res,rej)=>{
       const tx = db.transaction('tage','readwrite');
       const st = lvStrip(lvFiles, lvAssign, lvAuto);
-      tx.objectStore('tage').put({ files: st.files.map(f=>({name:f.name,buf:f.buf,text:f.text,pages:f.pages})), assign: st.assign, auto: st.auto }, 'lv:'+rk(targetDatum));
+      tx.objectStore('tage').put({ files: st.files.map(f=>({name:f.name,buf:f.buf,text:f.text,pages:f.pages,hintKey:f.hintKey,srcName:f.srcName})), assign: st.assign, auto: st.auto }, 'lv:'+rk(targetDatum));
       tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
     });
     db.close();
@@ -3652,6 +3654,42 @@ function lvRender(){
     prev.innerHTML = `So sieht die Rapport-PDF aus (${esc(t?t.name:'Tour')}): zuerst der Auftragsrapport, direkt danach die passende ${W}.<div class="lv-seq">${seq}</div>`;
   } else prev.innerHTML = '';
 }
+/* Eine PDF kann die Checklisten mehrerer Kunden enthalten (z. B. zusammen gescannt).
+   Jede Seite wird dem passenden Kunden des Tages zugeordnet; aufeinanderfolgende Seiten desselben
+   Kunden bleiben zusammen, Seiten ohne erkennbaren Kunden gehören zur vorherigen Checkliste.
+   Ergibt das mehr als einen Teil, wird die Datei in einzelne Checklisten getrennt. */
+async function lvSplit(r){
+  if(!r.pageTexts || r.pages<2) return [r];
+  const groups = {};
+  orders.filter(o=>o.assignedTourId).forEach(o=>{ const k = lvKey(o); (groups[k] ||= []).push(o); });
+  const keys = Object.keys(groups);
+  if(keys.length<2) return [r];
+  const ids = r.pageTexts.map(t=>{
+    const f = { text:t }; let best=null, bs=0, second=0;
+    keys.forEach(k=>{ const sc = Math.max(...groups[k].map(o=>lvScore(o,f))); if(sc>bs){ second=bs; bs=sc; best=k; } else if(sc>second) second=sc; });
+    return (bs>=30 && bs>second) ? best : null;
+  });
+  const segs = [];
+  ids.forEach((k,i)=>{
+    const last = segs[segs.length-1];
+    if(last && (k===null ? last.key!==null || last.lead : last.key===k)) last.pages.push(i+1);
+    else segs.push({ key:k, pages:[i+1], lead: k===null && !last });
+  });
+  if(segs.length<2) return [r];
+  const { PDFDocument } = PDFLib;
+  const src = await PDFDocument.load(r.buf.slice(0));
+  const out = [];
+  for(const sg of segs){
+    const d = await PDFDocument.create();
+    (await d.copyPages(src, sg.pages.map(n=>n-1))).forEach(pg=>d.addPage(pg));
+    const bytes = await d.save();
+    const rng = sg.pages.length>1 ? sg.pages[0]+'–'+sg.pages[sg.pages.length-1] : String(sg.pages[0]);
+    out.push({ name: r.name.replace(/\.pdf$/i,'') + ' (S. ' + rng + ').pdf', srcName: r.name,
+      buf: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength),
+      text: sg.pages.map(n=>r.pageTexts[n-1]).join('\n'), pages: sg.pages.length, hintKey: sg.key });
+  }
+  return out;
+}
 async function lvAddFiles(list){
   const files = [...list].filter(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));
   if(!files.length) return;
@@ -3659,8 +3697,17 @@ async function lvAddFiles(list){
   for(const f of files){
     try{
       const r = await lvReadFile(f);
-      const ix = lvFiles.findIndex(x=>x.name===r.name);
-      if(ix>=0) lvFiles[ix]=r; else lvFiles.push(r);
+      const parts = await lvSplit(r);
+      /* gleiche Datei nochmals eingefügt: alte Version (auch getrennte Teile) ersetzen */
+      const old = lvFiles.map((x,i)=>(x.name===r.name || x.srcName===r.name) ? i : -1).filter(i=>i>=0);
+      if(old.length){
+        const keep = lvFiles.filter((x,i)=>!old.includes(i));
+        const remap = {}; let j=0; lvFiles.forEach((x,i)=>{ if(!old.includes(i)) remap[i]=j++; });
+        for(const k in lvAssign){ const v=lvAssign[k]; if(v>=0){ if(remap[v]===undefined){ lvAssign[k]=-1; delete lvAuto[k]; } else lvAssign[k]=remap[v]; } }
+        lvFiles = keep;
+      }
+      parts.forEach(x=>lvFiles.push(x));
+      if(parts.length>1) toast(`«${r.name}» enthält ${parts.length} Checklisten – automatisch getrennt`, 'check');
     }catch(e){ console.error(e); toast('«'+f.name+'» konnte nicht gelesen werden','error'); }
   }
   lvAutoMatch(true);
