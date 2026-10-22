@@ -3515,18 +3515,20 @@ function lvArchFind(o){
   for(const r of lvArch){
     if(r.id===k) return r;
     const f = r._f || (r._f = { text: [r.customer, r.street, r.plz_ort, r.text_idx, r.fname].join(' ') });
-    const sc = lvScore(o, f) + (r.quelle==='angebot' ? 0 : 1);
+    const sc = lvScore(o, f) + (r.quelle && r.quelle!=='dispo' ? 0 : 1);
     if(sc>bs){ bs = sc; best = r; }
   }
   return bs>=80 ? best : null;
 }
+const LV_QUELLE = { angebot:['aus Angebot','Aus dem Angebots-Tool'], verkauf:['aus Verkaufstool','Aus dem Verkaufstool UH'] };
 function lvTagHtml(o){
   if(!DEPT) return '';
   if(lvArch===null){ if(!lvArchBusy) lvArchLoad().then(()=>{ try{ renderOrdersList(); }catch(e){} }); return ''; }
   if(!lvArchBusy && Date.now()-lvArchAt>120000){ lvArchLoad(true).then(()=>{ try{ renderOrdersList(); }catch(e){} }); }
   const W = DEPT==='uh' ? 'LV' : 'Checkliste';
   const r = lvArchFind(o);
-  return r ? `<span class="lv-tag" title="${r.quelle==='angebot'?'Aus dem Angebots-Tool':W+' gespeichert'}, Stand ${lvFmtDate(r.saved_at)}">✓ ${W} vorhanden${r.quelle==='angebot'?' · aus Angebot':''}</span>` : `<span class="lv-tag n">– keine ${W}</span>`;
+  const q = LV_QUELLE[r && r.quelle];
+  return r ? `<span class="lv-tag" title="${q?q[1]:W+' gespeichert'}, Stand ${lvFmtDate(r.saved_at)}">✓ ${W} vorhanden${q?' · '+q[0]:''}</span>` : `<span class="lv-tag n">– keine ${W}</span>`;
 }
 async function lvArchBuf(id){
   const rows = await sb(`dispo_checklisten?dept=eq.${DEPT}&id=eq.${encodeURIComponent(id)}&select=data`);
@@ -3628,7 +3630,7 @@ function lvRender(){
     const a = lvAssign[o.auftragNr]; const st = lvAuto[o.auftragNr];
     let badge;
     const fsel = a>=0 ? lvFiles[a] : null; const exr = lvArchFind(o);
-    if(fsel && fsel.archId){ nAuto++; badge=`<span class="lv-b lv-ok">✓ ${fsel.quelle==='angebot'?'aus Angebots-Tool':'gespeichert'} · Stand ${lvFmtDate(fsel.savedAt)}</span>`; }
+    if(fsel && fsel.archId){ nAuto++; badge=`<span class="lv-b lv-ok">✓ ${LV_QUELLE[fsel.quelle]?LV_QUELLE[fsel.quelle][0]:'gespeichert'} · Stand ${lvFmtDate(fsel.savedAt)}</span>`; }
     else if(fsel && (st==='auto'||st==='manual')){ nAuto++; badge = exr ? `<span class="lv-b lv-rep">↻ ersetzt Stand ${lvFmtDate(exr.saved_at)}</span>` : `<span class="lv-b lv-ok">✓ ${st==='manual'?'von Hand gewählt':'automatisch zugeordnet'} · wird gespeichert</span>`; }
     else if(a>=0){ nCheck++; badge='<span class="lv-b lv-wr">⚠ bitte prüfen</span>'; }
     else if(lvFiles.length){ nNone++; badge=`<span class="lv-b lv-no">keine ${W}</span>`; }
