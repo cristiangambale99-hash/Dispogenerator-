@@ -1164,12 +1164,12 @@ body:not(.dept-none) #gate{display:none}
           <h3 class="sec-t" style="margin:0 0 10px">Vorläufig in UH / SPEZ einplanen</h3>
           <div class="field" style="min-width:auto"><label>Abteilung</label>
             <div class="seg2">
-              <label><input type="radio" name="provDept" value="UH" checked><span>UH</span></label>
-              <label><input type="radio" name="provDept" value="SPEZ"><span>SPEZ</span></label>
+              <label><input type="checkbox" name="provDept" value="UH" checked><span>UH</span></label>
+              <label><input type="checkbox" name="provDept" value="SPEZ"><span>SPEZ</span></label>
             </div>
           </div>
           <div class="field" style="min-width:auto"><label>Mitarbeiterinnen</label><div id="provChips" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>
-          <p class="muted" style="font-size:12.5px;margin:8px 0">Die Abteilung meldet sich bis spätestens 17:00 Uhr bei den eingeplanten Mitarbeiterinnen, falls sie tatsächlich eingesetzt werden. Der Hinweis erscheint in der Dispo-PDF.</p>
+          <p class="muted" style="font-size:12.5px;margin:8px 0">Beide Abteilungen können gleichzeitig gewählt werden. Beim Bestätigen der Dispo erhalten unterhalt@clean-service.ch bzw. spezialreinigung@clean-service.ch eine Info-Mail. Die Abteilung meldet sich bis spätestens 17:00 Uhr direkt bei den Mitarbeiterinnen, falls sie eingesetzt werden. Der Hinweis erscheint auch in der Dispo-PDF.</p>
           <div id="provList"></div>
         </div>
         <p class="muted" id="rappStatus" style="font-size:13px;margin:0 0 10px"></p>
@@ -1283,6 +1283,7 @@ body:not(.dept-none) #gate{display:none}
     <p class="muted" id="notifyModalIntro" style="font-size:13.5px;margin:0 0 14px"></p>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13.5px;margin:0 0 12px"><input type="checkbox" id="bkToggle" style="margin-top:3px"><span id="bkLabel">Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden</span></label>
     <div id="bkStatus" class="muted" style="font-size:13px;margin:0 0 12px"></div>
+    <div id="provMailStatus" class="muted" style="font-size:13px;margin:0 0 12px"></div>
     <div id="notifyList"></div>
   </div>
   <div class="panel-f" style="position:static;border-top:1px solid var(--cs-line)">
@@ -2093,7 +2094,8 @@ let tours = [];
 let probes = {};        // {tourId:{name,phone}} Probedame je Tour (nur für diesen Tag)
 let freeTours = [];     // Tour-IDs, die für den Tag freigegeben (nicht verplant) sind
 let bkSentAt = null;    // Zeitpunkt, wann die Dispo dieses Tages in Beekeeper ging
-let provisional = [];   // [{name, dept:'UH'|'SPEZ'}] vorläufig eingeplant
+let provisional = [];   // [{name, dept:'UH'|'SPEZ'}] vorläufig eingeplant (bei beiden Abteilungen: zwei Einträge)
+let provMailSig = null; // Stand der zuletzt gesendeten Info-Mail an UH/SPEZ
 let selectedAuftragNr = null;
 
 function loadTours(){
@@ -2301,6 +2303,7 @@ function saveDayState(silent){
       parsedListRows,
       tours: JSON.parse(JSON.stringify(tours)),
       provisional,
+      provMailSig,
       bkSentAt,
       probes,
       freeTours,
@@ -2353,6 +2356,7 @@ function loadDayState(datum, silent){
     absenceOrders = data.absenceOrders || [];
     parsedListRows = data.parsedListRows || [];
     provisional = Array.isArray(data.provisional) ? data.provisional : [];
+    provMailSig = data.provMailSig || null;
     bkSentAt = data.bkSentAt || null;
     probes = (data.probes && typeof data.probes==='object') ? data.probes : {};
     freeTours = Array.isArray(data.freeTours) ? data.freeTours : [];
@@ -2867,8 +2871,8 @@ document.getElementById('btnParse').addEventListener('click', async ()=>{
     orders = merged.filter(o=>!o.isAbsence);
     const draftCount = applyPreAssignedDrafts(orders, tours);
     // Beekeeper-Stand/Einplanung: nur vom gleichen, bereits gespeicherten Tag übernehmen
-    bkSentAt = null; provisional = []; probes = {}; freeTours = [];
-    try{ const prev = JSON.parse(localStorage.getItem(dayKey(targetDatum))||'null'); if(prev){ bkSentAt = prev.bkSentAt||null; probes = prev.probes||{}; freeTours = prev.freeTours||[]; provisional = Array.isArray(prev.provisional)?prev.provisional:[]; } }catch(e){}
+    bkSentAt = null; provisional = []; probes = {}; freeTours = []; provMailSig = null;
+    try{ const prev = JSON.parse(localStorage.getItem(dayKey(targetDatum))||'null'); if(prev){ bkSentAt = prev.bkSentAt||null; provMailSig = prev.provMailSig||null; probes = prev.probes||{}; freeTours = prev.freeTours||[]; provisional = Array.isArray(prev.provisional)?prev.provisional:[]; } }catch(e){}
 
     statusEl.textContent = `${orders.length} Aufträge eingelesen${targetDatum ? ' für ' + targetDatum : ''}${draftCount>0 ? ' · '+draftCount+' bereits als Entwurf zugeteilt (aus Disposition übernommen)' : ''}.`;
     toast(draftCount>0 ? `Aufträge eingelesen · ${draftCount} als Entwurf übernommen` : 'Aufträge eingelesen', 'check');
@@ -3037,13 +3041,73 @@ function renderProvisional(){
   card.addEventListener('click', e=>{
     const c = e.target.closest('[data-prov]'), d = e.target.closest('[data-provdel]');
     if(c){
-      const n = c.dataset.prov, i = provisional.findIndex(p=>p.name===n);
-      if(i>=0) provisional.splice(i,1);
-      else provisional.push({ name:n, dept: (document.querySelector('input[name="provDept"]:checked')||{}).value || 'UH' });
+      const n = c.dataset.prov;
+      if(provisional.some(p=>p.name===n)) provisional = provisional.filter(p=>p.name!==n);
+      else {
+        const depts = [...document.querySelectorAll('input[name="provDept"]:checked')].map(x=>x.value);
+        if(!depts.length){ toast('Bitte zuerst UH, SPEZ oder beide wählen', 'warning'); return; }
+        depts.forEach(dp=> provisional.push({ name:n, dept:dp }));
+      }
     } else if(d){ provisional.splice(+d.dataset.provdel,1); } else return;
     renderProvisional(); scheduleDaySave();
   });
 })();
+
+/* Info-Mail an UH / SPEZ: welche Mitarbeiterinnen ihnen am Dispo-Tag vorläufig zur Verfügung stehen */
+const PROV_MAIL = { UH:{ to:'unterhalt@clean-service.ch', team:'Unterhaltsreinigung' }, SPEZ:{ to:'spezialreinigung@clean-service.ch', team:'Spezialreinigung' } };
+function provDayText(){
+  const m = String(targetDatum||'').match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  const wd = m ? ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'][new Date(+m[3],+m[2]-1,+m[1]).getDay()] : '';
+  return (wd ? wd + ', ' : '') + (targetDatum||'');
+}
+function provNamesText(names){ return names.length>1 ? names.slice(0,-1).join(', ') + ' und ' + names[names.length-1] : names[0]; }
+function buildProvMails(){
+  const esc = s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  return ['UH','SPEZ'].map(dept=>{
+    const names = provisional.filter(p=>p.dept===dept).map(p=>p.name);
+    if(!names.length) return null;
+    const cfg = PROV_MAIL[dept], day = provDayText(), one = names.length===1;
+    const subject = `Springerteam: ${provNamesText(names)} am ${day} für euch verfügbar`;
+    const paras = [
+      `Hallo Team ${cfg.team}`,
+      `Für ${day}, haben wir ${one?'folgende Mitarbeiterin':'folgende Mitarbeiterinnen'} aus dem Springerteam vorläufig für euch eingeplant: ${provNamesText(names)}.`,
+      `Falls ihr ${one?'sie':'sie'} einsetzen möchtet, meldet euch bitte bis spätestens 17:00 Uhr direkt bei ${one?'der Mitarbeiterin':'den Mitarbeiterinnen'}. Ohne Rückmeldung bis dahin ${one?'steht sie':'stehen sie'} euch an diesem Tag nicht zur Verfügung.`,
+      `Freundliche Grüsse<br>Putzfrauenservice Clean Service`
+    ];
+    const html = `<div style="font-family:Verdana,Arial,sans-serif;font-size:13px;color:#3C3C3B;line-height:1.55">` + paras.map(t=>`<p style="margin:0 0 12px">${t.includes('<br>')?t:esc(t)}</p>`).join('') + `</div>`;
+    return { dept, to: cfg.to, subject, html, names };
+  }).filter(Boolean);
+}
+function provMailSigNow(){ return provisional.length ? targetDatum + '|' + JSON.stringify(provisional.map(p=>p.dept+':'+p.name).sort()) : null; }
+async function sendProvMails(){
+  const sig = provMailSigNow();
+  if(!sig || sig===provMailSig) return;
+  const mails = buildProvMails();
+  const st = document.getElementById('provMailStatus');
+  try{
+    const r = await fetch('/api/send-email', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ emails: mails.map(m=>({ to:m.to, subject:m.subject, html:m.html })) }) });
+    const d = await r.json().catch(()=>({}));
+    const res = (d && d.results) || [];
+    const ok = res.filter(x=>x.ok).length;
+    if(r.ok && ok===mails.length){
+      provMailSig = sig; scheduleDaySave();
+      if(st) st.innerHTML = `<span style="color:#1B8384;font-weight:600">✓ Info-Mail gesendet an ${mails.map(m=>m.to).join(' und ')}</span>`;
+      toast('Info-Mail an ' + mails.map(m=>m.dept).join(' und ') + ' gesendet', 'check');
+    } else throw new Error((res.find(x=>!x.ok)||{}).error || d.error || ('HTTP ' + r.status));
+  }catch(err){
+    console.error(err);
+    if(st) st.innerHTML = `<span style="color:#b84a3e;font-weight:600">✗ Info-Mail an UH/SPEZ fehlgeschlagen:</span> ${String(err.message||err)}`;
+    toast('Info-Mail an UH/SPEZ fehlgeschlagen', 'error');
+  }
+}
+function renderProvMailInfo(){
+  const st = document.getElementById('provMailStatus'); if(!st) return;
+  const mails = buildProvMails();
+  if(!mails.length){ st.innerHTML = ''; return; }
+  st.innerHTML = provMailSigNow()===provMailSig
+    ? `<span style="color:#1B8384">✓ Info-Mail an ${mails.map(m=>m.to).join(' und ')} bereits gesendet</span>`
+    : `Beim Senden geht zusätzlich eine Info-Mail an ${mails.map(m=>`<b>${m.to}</b> (${m.names.join(', ')})`).join(' und ')}.`;
+}
 
 function statusBadge(o){
   if(o.assignedTourId){
@@ -4273,6 +4337,7 @@ function notifyRowHtml(o, statusHtml, swatchColor){
 }
 
 function renderNotifyList(){
+  try{ renderProvMailInfo(); }catch(e){}
   const bkl = document.getElementById('bkLabel');
   if(bkl) bkl.textContent = bkSentAt ? 'Angepasste Dispo (mit Hinweis «Wichtig») und alle Auftragsrapporte in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden' : 'Dispo und alle Auftragsrapporte zusätzlich in den Beekeeper-Chat «PFS: Dispo Springer-Team» senden';
   const listEl = document.getElementById('notifyList');
@@ -4316,9 +4381,10 @@ function renderNotifyList(){
   if(pending.length===0){
     introEl.textContent = 'Keine neuen oder geänderten Zeitmitteilungen zu versenden.';
     listEl.innerHTML = '';
-    sendBtn.hidden = !bkEnabled();
+    const provOpen = DEPT!=='uh' && !!provMailSigNow() && provMailSigNow()!==provMailSig;
+    sendBtn.hidden = !bkEnabled() && !provOpen;
     sendBtn.disabled = false;
-    sendBtn.textContent = 'Dispo in Beekeeper senden';
+    sendBtn.textContent = bkEnabled() ? 'Dispo in Beekeeper senden' : 'Info-Mail senden';
     cancelBtn.textContent = 'Abbrechen';
     return;
   }
@@ -4387,7 +4453,8 @@ document.getElementById('notifyScrim').addEventListener('click', closeNotifyModa
 
 document.getElementById('notifySendBtn').addEventListener('click', ()=>{
   const pending = pendingNotifications();
-  if(bkEnabled()) sendDispoToBeekeeper();   // zuerst, solange die Klick-Berechtigung (Dateiauswahl) gilt
+  if(bkEnabled()) sendDispoToBeekeeper();
+  if(DEPT!=='uh') sendProvMails();   // zuerst, solange die Klick-Berechtigung (Dateiauswahl) gilt
   if(pending.length===0) return;
   notifyBatch = pending.map(o=>({ o, status:'sending' }));
   renderNotifyList();
