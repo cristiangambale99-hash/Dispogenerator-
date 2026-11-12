@@ -794,7 +794,27 @@ td .name{font-weight:600}
 .mapmodal.open{opacity:1;pointer-events:auto;visibility:visible;transform:translate(-50%,0);transition-delay:0s}
 .mapmodal-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid var(--cs-line);background:var(--cs-head);flex:0 0 auto}
 .mapmodal-h h2{font-size:19px;font-weight:600;font-family:var(--cs-font)}
-#tourMapEl{flex:1;min-height:0}
+#tourMapEl{flex:1;min-height:0;min-width:0}
+.mapbody{flex:1;min-height:0;display:flex}
+.mapmodal.plan{width:min(1280px,96vw)}
+#mapSide{width:340px;flex:0 0 340px;border-right:1px solid var(--cs-line);overflow-y:auto;padding:14px 16px;font-size:13px}
+#mapSide .mp-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+#mapSide .mp-chip{border:1px solid var(--cs-line-strong);border-radius:99px;padding:4px 10px;font:inherit;font-size:12.5px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;min-height:32px}
+#mapSide .mp-chip.on{border-color:#1B8384;background:var(--cs-mint-bg,#eaf6f8);font-weight:600}
+#mapSide .mp-dot{width:10px;height:10px;border-radius:50%}
+#mapSide .mp-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #eef4f6}
+#mapSide .mp-num{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 26px}
+#mapSide .mp-tx{flex:1;min-width:0;line-height:1.3}#mapSide .mp-tx small{display:block;color:var(--cs-fg-2);font-size:11.5px}
+#mapSide .mp-mv{display:flex;flex-direction:column;gap:2px}
+#mapSide .mp-mv button{border:1px solid var(--cs-line-strong);background:#fff;border-radius:6px;width:28px;height:22px;font-size:11px;cursor:pointer;padding:0;color:#1B8384}
+#mapSide .mp-mv button:disabled{opacity:.3;cursor:default}
+#mapSide .mp-leg{font-size:11.5px;color:#1B8384;padding:3px 0 3px 35px}
+#mapSide .mp-sum{margin-top:10px;background:var(--cs-mint-bg,#eaf6f8);border-radius:10px;padding:10px 12px;font-size:12.5px}
+#mapSide .mp-warn{margin-top:8px;background:#fdf1e3;color:#8a4a00;border-radius:10px;padding:8px 12px;font-size:12px}
+#mapSide h4{margin:16px 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--cs-fg-2)}
+#mapSide select,#mapSide input{border:1px solid var(--cs-line-strong);border-radius:7px;padding:4px 6px;font:inherit;font-size:12px;background:#fff}
+.map-leg-pill{display:inline-block;transform:translate(-50%,-50%);background:#fff;border:1.5px solid currentColor;border-radius:99px;padding:2px 8px;font:700 11.5px sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(30,60,70,.18)}
+@media (max-width:760px){.mapbody{flex-direction:column}#mapSide{width:auto;flex:0 0 auto;max-height:42%;border-right:0;border-bottom:1px solid var(--cs-line)}}
 #mapModalStatus{padding:8px 20px;flex:0 0 auto;border-top:1px solid var(--cs-line)}
 @media (max-width:640px){ .mapmodal{top:0;left:0;transform:none;width:100vw;height:100vh;border-radius:0} .mapmodal.open{transform:none} }
 .dl{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;font-size:14.5px}
@@ -945,6 +965,14 @@ table.lv-t select{border:1px solid #c5dde1;border-radius:8px;padding:5px 8px;fon
 .stat-row{display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0}
 .toursec{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .tourcard{width:100%}
+.sd-month{border:1px solid var(--cs-line);border-radius:10px;overflow:hidden}
+.sd-month>button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;font-weight:600;font-size:14px;background:#fbfdfd}
+.sd-month>button:focus-visible{outline:2px solid #1B8384;outline-offset:-2px}
+.sd-month.open>button{background:var(--cs-mint-bg,#eaf6f8);color:#187778}
+.sd-month .ch{width:12px;color:var(--cs-fg-2);font-size:12px}
+.sd-month .fold{width:20px;height:15px;border-radius:3px;background:#BEE2E9;position:relative;flex:0 0 20px}.sd-month .fold:before{content:"";position:absolute;left:0;top:-4px;width:9px;height:5px;border-radius:2px 2px 0 0;background:#BEE2E9}
+.sd-month .cnt{margin-left:auto;font-weight:500;font-size:12px;color:var(--cs-fg-2);background:#eef6f8;border-radius:99px;padding:2px 9px}
+.sd-month .sd-list{display:flex;flex-direction:column;gap:6px;padding:8px 10px 10px}
 .savedday-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid var(--cs-line);border-radius:10px}
 .savedday-row .tx{display:flex;flex-direction:column;gap:2px}
 .savedday-row .tx small{color:var(--cs-fg-2);font-size:12.5px}
@@ -1054,6 +1082,7 @@ body:not(.dept-none) #gate{display:none}
         <div class="card" id="savedDaysCard" style="margin-bottom:20px;padding:18px 20px" hidden>
           <div class="card-h" style="padding:0 0 12px"><h2>Gespeicherte Tagesdispositionen</h2></div>
           <p class="muted" style="font-size:13px;margin:-6px 0 12px">Anpassungen während des Tages werden hier laufend gesichert – jederzeit wieder aufnehmbar.</p>
+          <input type="search" id="savedDaysSearch" placeholder="Datum oder Kunde suchen …" style="width:100%;border:1px solid var(--cs-line-strong);border-radius:8px;padding:8px 10px;font:inherit;font-size:14px;margin:0 0 10px">
           <div id="savedDaysWrap" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
 
@@ -1269,7 +1298,7 @@ body:not(.dept-none) #gate{display:none}
     <div><div class="eyebrow">Tour auf der Karte</div><h2 id="mapModalTitle">–</h2></div>
     <button class="icon-btn" id="mapModalClose" aria-label="Schliessen"><svg><use href="#i-x"/></svg></button>
   </div>
-  <div id="tourMapEl"></div>
+  <div class="mapbody"><aside id="mapSide" hidden></aside><div id="tourMapEl"></div></div>
   <div id="mapModalStatus" class="muted" style="font-size:12.5px"></div>
 </div>
 
@@ -1858,6 +1887,14 @@ function jobDurationMinutes(aufwand, teamSize, isEinfuehrung){
 }
 
 function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+/* Reihenfolge innerhalb einer Tour: die auf der Karte festgelegte Nummer (gilt nur für die Tour,
+   in der sie gesetzt wurde), sonst die Uhrzeit. Aufträge ohne Nummer folgen nach Zeit. */
+function tourSeq(o){ return (o && o.mapSeq && o.mapSeq.t===o.assignedTourId) ? o.mapSeq.n : null; }
+function tourOrderCmp(a,b){
+  const sa = tourSeq(a), sb = tourSeq(b);
+  if(sa!=null || sb!=null){ if(sa==null) return 1; if(sb==null) return -1; if(sa!==sb) return sa-sb; }
+  return (a.assignedTime?timeToMin(a.assignedTime):9999) - (b.assignedTime?timeToMin(b.assignedTime):9999);
+}
 function minToTime(m){ m=Math.round(m); const h=Math.floor(m/60); const mm=m%60; return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
 function fmtHoursShort(min){ return (min/60).toFixed(1).replace('.0','').replace('.', ',') + ' Std.'; }
 /* Zeit-/Aufwand-Beschriftung für PDF-Stopps: bei einer 2er-Tour ist die
@@ -2404,14 +2441,28 @@ function fmtSavedAt(iso){
     return d.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit'}) + ' ' + d.toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'});
   }catch(e){ return ''; }
 }
+/* Gespeicherte Tage nach Monat in Ordnern (neuster Monat oben). Der Monat des geladenen
+   Tages (sonst der neuste) ist offen, die übrigen zugeklappt; Suche nach Datum oder Kunde. */
+const sdOpen = {};   // 'YYYY-MM' -> true/false (vom Benutzer auf-/zugeklappt)
+const SD_MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const SD_WD = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+function sdParse(dt){ const m = String(dt||'').match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? { y:+m[3], m:+m[2], d:+m[1], key:m[3]+'-'+m[2], sort:m[3]+m[2]+m[1] } : null; }
 function renderSavedDays(){
   const card = document.getElementById('savedDaysCard');
   const wrap = document.getElementById('savedDaysWrap');
   if(!card || !wrap) return;
-  const days = listSavedDays();
-  if(days.length===0){ card.hidden = true; return; }
+  const all = listSavedDays();
+  if(all.length===0){ card.hidden = true; return; }
   card.hidden = false;
-  wrap.innerHTML = days.map(d=>{
+  const qEl = document.getElementById('savedDaysSearch');
+  const q = (qEl && qEl.value || '').trim().toLowerCase();
+  const days = q ? all.filter(d=> d.targetDatum.includes(q) || (d.orders||[]).some(o=> String(o.customerName||'').toLowerCase().includes(q) || String(o.address||'').toLowerCase().includes(q) || String(o.auftragNr||'').includes(q))) : all;
+  const groups = {};
+  days.forEach(d=>{ const p = sdParse(d.targetDatum); const k = p ? p.key : 'ohne'; (groups[k] ||= []).push(d); });
+  const keys = Object.keys(groups).sort().reverse();
+  const cur = sdParse(targetDatum);
+  const defOpen = cur && groups[cur.key] ? cur.key : keys[0];
+  const rowHtml = d=>{
     const openCount = (d.orders||[]).filter(o=>!o.assignedTourId).length;
     const isCurrent = d.targetDatum===targetDatum;
     const assignedCount = (d.orders||[]).length - openCount;
@@ -2419,19 +2470,30 @@ function renderSavedDays(){
     const nProbe = Object.values(d.probes||{}).filter(p=>p && (p.name||p.phone)).length;
     const nFree = (d.freeTours||[]).length;
     const extra = (nProbe? ` · ${nProbe} Probedame`:'') + (nFree? ` · ${nFree} frei`:'');
+    const p = sdParse(d.targetDatum);
+    const wd = p ? SD_WD[new Date(p.y,p.m-1,p.d).getDay()] + ', ' : '';
     return `<div class="savedday-row">
-      <div class="tx"><b>${d.targetDatum}</b><small>Zuletzt gesichert ${fmtSavedAt(d.savedAt)} · ${(d.orders||[]).length} Aufträge · ${nTours} ${nTours===1?'Tour':'Touren'} · ${assignedCount} zugeteilt${openCount>0 ? ', '+openCount+' offen' : ''}${extra}</small></div>
+      <div class="tx"><b>${wd}${d.targetDatum}</b><small>Zuletzt gesichert ${fmtSavedAt(d.savedAt)} · ${(d.orders||[]).length} Aufträge · ${nTours} ${nTours===1?'Tour':'Touren'} · ${assignedCount} zugeteilt${openCount>0 ? ', '+openCount+' offen' : ''}${extra}</small></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-s" data-load-day="${d.targetDatum}">${isCurrent?'Aktuell geladen':'Laden'}</button>
         <button class="icon-btn" aria-label="Gespeicherte Dispo löschen" data-del-day="${d.targetDatum}"><svg><use href="#i-trash"/></svg></button>
       </div>
     </div>`;
-  }).join('');
+  };
+  wrap.innerHTML = keys.length ? keys.map(k=>{
+    const list = groups[k].slice().sort((a,b)=> ((sdParse(b.targetDatum)||{}).sort||'').localeCompare((sdParse(a.targetDatum)||{}).sort||''));
+    const open = q ? true : (k in sdOpen ? sdOpen[k] : k===defOpen);
+    const [y,m] = k.split('-');
+    const label = k==='ohne' ? 'Ohne Datum' : SD_MONTHS[+m-1] + ' ' + y;
+    return `<div class="sd-month${open?' open':''}"><button type="button" data-sd-month="${k}" aria-expanded="${open}"><span class="ch">${open?'▾':'▸'}</span><span class="fold"></span>${label}<span class="cnt">${list.length} ${list.length===1?'Tag':'Tage'}</span></button>${open?`<div class="sd-list">${list.map(rowHtml).join('')}</div>`:''}</div>`;
+  }).join('') : '<p class="muted" style="font-size:13px;margin:4px 0">Keine gespeicherte Dispo passt zur Suche.</p>';
+  wrap.querySelectorAll('[data-sd-month]').forEach(b=> b.addEventListener('click', ()=>{ const k = b.dataset.sdMonth; sdOpen[k] = !b.parentElement.classList.contains('open'); renderSavedDays(); }));
   wrap.querySelectorAll('[data-load-day]').forEach(btn=> btn.addEventListener('click', ()=> loadDayState(btn.dataset.loadDay)));
   wrap.querySelectorAll('[data-del-day]').forEach(btn=> btn.addEventListener('click', ()=>{
     if(confirm(`Gespeicherte Dispo vom ${btn.dataset.delDay} wirklich löschen?`)) deleteDayState(btn.dataset.delDay);
   }));
 }
+(function(){ const el = document.getElementById('savedDaysSearch'); if(el) el.addEventListener('input', ()=> renderSavedDays()); })();
 
 /* =====================================================================
    ROUTE / KARTENANSICHT
@@ -2591,6 +2653,41 @@ async function fetchRoute(points){
     coords: r.geometry.coordinates.map(c=>[c[1], c[0]])
   };
 }
+/* Route mit Fahrzeit je Teilstrecke (OSRM-Legs). Die Linie wird an den Stopps in Teilstücke
+   zerlegt, damit die Fahrzeit mitten auf die jeweilige Strecke geschrieben werden kann. */
+const routeCache = {};
+async function fetchRouteLegs(points){
+  if(points.length<2) return null;
+  const key = points.map(p=>p.lat.toFixed(5)+','+p.lng.toFixed(5)).join(';');
+  if(routeCache[key]) return routeCache[key];
+  const coords = points.map(p=>`${p.lng},${p.lat}`).join(';');
+  const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+  if(!res.ok) throw new Error('Routing fehlgeschlagen');
+  const data = await res.json();
+  if(!data.routes || !data.routes.length) return null;
+  const r = data.routes[0];
+  const line = r.geometry.coordinates.map(c=>[c[1], c[0]]);
+  const wp = (data.waypoints||[]).map(w=>[w.location[1], w.location[0]]);
+  const idx = [0]; let from = 0;
+  for(let k=1;k<wp.length;k++){
+    let best = from, bd = Infinity;
+    for(let j=from;j<line.length;j++){ const d = (line[j][0]-wp[k][0])**2 + (line[j][1]-wp[k][1])**2; if(d<bd){ bd=d; best=j; } }
+    idx.push(best); from = best;
+  }
+  const legs = (r.legs||[]).map((l,i)=>({ min:l.duration/60, km:l.distance/1000, coords: line.slice(idx[i]||0, (idx[i+1]!=null?idx[i+1]:line.length-1)+1) }));
+  const out = { distanceKm:r.distance/1000, durationMin:r.duration/60, coords:line, legs };
+  routeCache[key] = out;
+  return out;
+}
+function fmtLegMin(min){ const m = Math.max(1, Math.round(min)); return m>=60 ? Math.floor(m/60)+' Std. '+(m%60)+' Min' : m+' Min'; }
+function addLegPills(layer, route, color, opacity){
+  (route.legs||[]).forEach(l=>{
+    if(!l.coords || !l.coords.length) return;
+    const mid = l.coords[Math.floor(l.coords.length/2)];
+    L.marker(mid, { interactive:false, keyboard:false, opacity: opacity==null?1:opacity, zIndexOffset:-100,
+      icon: L.divIcon({ className:'', iconSize:[0,0], html:`<span class="map-leg-pill" style="color:${color}">${fmtLegMin(l.min)}</span>` }) }).addTo(layer);
+  });
+}
 function fmtDuration(min){
   const h = Math.floor(min/60);
   const m = Math.round(min%60);
@@ -2642,6 +2739,7 @@ function wireMapAssignPopup(e, o){
       const time = timeEl.value;
       if(!tourId){ toast('Bitte eine Tour wählen', 'warning'); return; }
       if(!time){ toast('Bitte eine Uhrzeit eintragen', 'warning'); return; }
+      if(o.assignedTourId!==tourId) delete o.mapSeq;
       o.assignedTourId = tourId;
       o.assignedTime = time;
       toast('Auftrag zugeteilt', 'check');
@@ -2660,8 +2758,135 @@ function wireMapAssignPopup(e, o){
 }
 let currentMapRefresh = null;
 
-async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute, routeColor, onPopupOpen }){
+/* ---- Planungskarte (alle Aufträge): Mitarbeiterin + Reihenfolge festlegen, Fahrzeit je Strecke ---- */
+let mapPlan = null;   // { items, res, sel, fitted, legs:{tourId:route} }
+const MP_GREY = '#9aa5a8';
+function mpNumIcon(n, color, opacity){
+  return L.divIcon({ className:'', iconSize:[28,28], iconAnchor:[14,14],
+    html:`<div style="box-sizing:border-box;background:${color};color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font:700 12.5px sans-serif;border:2.5px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.4);opacity:${opacity}">${n}</div>` });
+}
+function mpTourLists(){
+  const { items, res } = mapPlan; const by = {}; const un = [];
+  items.forEach((o,i)=>{ const t = o.assignedTourId && tours.find(x=>x.id===o.assignedTourId); if(t) (by[t.id] ||= []).push(o); else un.push(o); });
+  Object.values(by).forEach(l=> l.sort(tourOrderCmp));
+  return { by, un, pos: o=> res[items.indexOf(o)] };
+}
+async function drawPlan(){
+  if(!mapPlan || !tourMapLayer) return;
+  const statusEl = document.getElementById('mapModalStatus');
+  const { by, un, pos } = mpTourLists();
+  const tids = tours.filter(t=>by[t.id]).map(t=>t.id);
+  if(!mapPlan.sel || (mapPlan.sel!=='alle' && !by[mapPlan.sel])) mapPlan.sel = tids[0] || 'alle';
+  const sel = mapPlan.sel;
+  tourMapLayer.clearLayers();
+  mapPlan.legs = {};
+  const bounds = [];
+  const marker = (o, icon, z)=>{
+    const pt = pos(o); if(!pt) return;
+    bounds.push([pt.lat, pt.lng]);
+    L.marker([pt.lat, pt.lng], { icon, zIndexOffset:z }).addTo(tourMapLayer)
+      .bindPopup(mapPopupHtml(o), { maxWidth:280, minWidth:230 })
+      .on('popupopen', ev=> wireMapAssignPopup(ev, o));
+  };
+  un.forEach(o=> marker(o, mpNumIcon('?', MP_GREY, 1), 50));
+  statusEl.textContent = 'Strecken werden berechnet …';
+  for(const tid of tids){
+    const t = tours.find(x=>x.id===tid); const list = by[tid];
+    const on = sel==='alle' || sel===tid;
+    const op = on ? 1 : .4;
+    list.forEach((o,k)=> marker(o, mpNumIcon(k+1, t.color, op), on?400:100));
+    const pts = list.map(pos).filter(Boolean);
+    if(pts.length<2) continue;
+    let route = null;
+    try{ route = await fetchRouteLegs(pts); }catch(e){ route = null; }
+    if(route){
+      mapPlan.legs[tid] = route;
+      if(on) L.polyline(route.coords, { color:'#fff', weight:7, opacity:.9, lineCap:'round', lineJoin:'round', interactive:false }).addTo(tourMapLayer);
+      L.polyline(route.coords, { color:t.color, weight:on?4.5:3, opacity:on?1:.35, lineCap:'round', lineJoin:'round', interactive:false }).addTo(tourMapLayer);
+      if(on) addLegPills(tourMapLayer, route, t.color);
+    } else {
+      L.polyline(pts.map(p=>[p.lat,p.lng]), { color:t.color, weight:3, opacity:on?.7:.3, dashArray:'4,10', interactive:false }).addTo(tourMapLayer);
+    }
+  }
+  if(!mapPlan.fitted && bounds.length){ tourMapInstance.fitBounds(bounds, { padding:[40,40] }); mapPlan.fitted = true; }
+  const missing = mapPlan.items.filter((o,i)=>!mapPlan.res[i]);
+  statusEl.innerHTML = missing.length
+    ? `<b style="color:#b8453c">${missing.length} Auftr${missing.length>1?'äge':'ag'} nicht lokalisiert:</b> ${missing.map(o=>String(o.auftragNr)).join(', ')} <button type="button" id="mapRetryBtn" class="btn btn-s" style="padding:3px 10px;min-height:0;margin-left:6px">Erneut versuchen</button>`
+    : `Alle ${mapPlan.items.length} Aufträge auf der Karte. Fahrzeiten sind Schätzungen ohne Verkehr.`;
+  const rb = document.getElementById('mapRetryBtn'); if(rb) rb.addEventListener('click', ()=>{ if(currentMapRefresh) currentMapRefresh(); });
+  renderPlanSide();
+}
+function mpSetOrder(tid, list){
+  list.forEach((o,k)=>{ o.mapSeq = { t:tid, n:k+1 }; });
+  scheduleDaySave(); try{ renderAll(); }catch(e){}
+  drawPlan();
+}
+function renderPlanSide(){
+  const side = document.getElementById('mapSide'); if(!side || !mapPlan) return;
+  const esc = v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const { by, un } = mpTourLists();
+  const sel = mapPlan.sel;
+  const chips = tours.filter(t=>by[t.id]).map(t=>`<button type="button" class="mp-chip${sel===t.id?' on':''}" data-mp-sel="${t.id}"><span class="mp-dot" style="background:${t.color}"></span>${esc(t.name)} <span class="muted">${by[t.id].length}</span></button>`).join('')
+    + `<button type="button" class="mp-chip${sel==='alle'?' on':''}" data-mp-sel="alle">Alle</button>`;
+  let body = '';
+  const tourBlock = tid=>{
+    const t = tours.find(x=>x.id===tid); const list = by[tid]; const route = mapPlan.legs[tid];
+    let h = sel==='alle' ? `<h4 style="color:${t.color}">${esc(t.name)}</h4>` : '';
+    list.forEach((o,k)=>{
+      h += `<div class="mp-row"><span class="mp-num" style="background:${t.color}">${k+1}</span><span class="mp-tx"><b>${esc(o.customerName||o.auftragNr)}</b><small>${esc(o.address||'')}${o.assignedTime?' · '+o.assignedTime:''}</small></span>
+        <span class="mp-mv"><button type="button" data-mp-up="${tid}|${k}" aria-label="Nach oben"${k===0?' disabled':''}>▲</button><button type="button" data-mp-dn="${tid}|${k}" aria-label="Nach unten"${k===list.length-1?' disabled':''}>▼</button></span></div>`;
+      const l = route && route.legs[k];
+      if(l && k<list.length-1) h += `<div class="mp-leg">↓ ${fmtLegMin(l.min)} · ${l.km.toFixed(1).replace('.',',')} km</div>`;
+    });
+    const total = route ? route.durationMin : 0;
+    h += `<div class="mp-sum"><b>${esc(t.name)}: ${list.length} Kunde${list.length===1?'':'n'}${route?' · Fahrzeit total '+fmtLegMin(total):''}</b><br><span class="muted">Mit ▲ ▼ die Reihenfolge ändern – sie gilt auch für die Dispo und die Rapport-PDF.</span></div>`;
+    const times = list.map(o=>o.assignedTime?timeToMin(o.assignedTime):null).filter(v=>v!=null);
+    if(times.some((v,i)=>i>0 && v<times[i-1])) h += `<div class="mp-warn">⚠ Die Uhrzeiten passen nicht zur Reihenfolge. Bitte die Zeiten der Kunden anpassen (auf den Punkt klicken).</div>`;
+    if(list.some(o=>tourSeq(o)!=null)) h += `<button type="button" class="btn btn-s" data-mp-reset="${tid}" style="margin-top:8px;font-size:12px;padding:5px 10px">Wieder nach Uhrzeit sortieren</button>`;
+    return h;
+  };
+  if(sel==='alle') body = tours.filter(t=>by[t.id]).map(t=>tourBlock(t.id)).join('');
+  else if(by[sel]) body = tourBlock(sel);
+  else body = '<p class="muted">Noch keine Aufträge einer Mitarbeiterin zugeteilt.</p>';
+  if(un.length){
+    const opts = tours.map(t=>`<option value="${t.id}"${sel===t.id?' selected':''}>${esc(t.name)}</option>`).join('');
+    body += `<h4>Noch nicht eingeteilt (${un.length})</h4>` + un.map(o=>`<div class="mp-row"><span class="mp-num" style="background:${MP_GREY}">?</span><span class="mp-tx"><b>${esc(o.customerName||o.auftragNr)}</b><small>${esc(o.address||'')}</small></span></div>
+      <div style="display:flex;gap:6px;padding:0 0 8px 35px"><select data-mp-tour="${esc(o.auftragNr)}" aria-label="Mitarbeiterin"><option value="">Mitarbeiterin …</option>${opts}</select><input data-mp-time="${esc(o.auftragNr)}" inputmode="numeric" maxlength="5" placeholder="HH:MM" style="width:64px" aria-label="Uhrzeit"><button type="button" class="btn btn-p" data-mp-assign="${esc(o.auftragNr)}" style="padding:4px 10px;font-size:12px;min-height:0">Zuteilen</button></div>`).join('');
+  }
+  side.innerHTML = `<div class="eyebrow" style="margin-bottom:2px">Reihenfolge festlegen</div><div class="mp-chips">${chips}</div>${body}`;
+}
+(function wirePlanSide(){
+  const side = document.getElementById('mapSide'); if(!side) return;
+  side.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b || !mapPlan) return;
+    const { by } = mpTourLists();
+    if(b.dataset.mpSel){ mapPlan.sel = b.dataset.mpSel; drawPlan(); return; }
+    const mv = b.dataset.mpUp || b.dataset.mpDn;
+    if(mv){
+      const [tid, ks] = mv.split('|'); const k = +ks; const list = by[tid].slice();
+      const j = b.dataset.mpUp ? k-1 : k+1; if(j<0 || j>=list.length) return;
+      [list[k], list[j]] = [list[j], list[k]];
+      mpSetOrder(tid, list); return;
+    }
+    if(b.dataset.mpReset){ (by[b.dataset.mpReset]||[]).forEach(o=>{ delete o.mapSeq; }); scheduleDaySave(); try{ renderAll(); }catch(e){} drawPlan(); return; }
+    if(b.dataset.mpAssign){
+      const nr = b.dataset.mpAssign; const o = mapPlan.items.find(x=>String(x.auftragNr)===nr); if(!o) return;
+      const tid = side.querySelector(`[data-mp-tour="${CSS.escape(nr)}"]`).value;
+      const time = (side.querySelector(`[data-mp-time="${CSS.escape(nr)}"]`).value||'').trim();
+      if(!tid){ toast('Bitte eine Mitarbeiterin wählen', 'warning'); return; }
+      if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ toast('Bitte eine Uhrzeit im Format HH:MM eintragen', 'warning'); return; }
+      o.assignedTourId = tid; o.assignedTime = time; delete o.mapSeq;
+      const list = (by[tid]||[]).slice(); if(list.some(x=>tourSeq(x)!=null)){ list.push(o); list.forEach((x,k)=>{ x.mapSeq = { t:tid, n:k+1 }; }); }
+      mapPlan.sel = tid; scheduleDaySave(); try{ renderAll(); }catch(e){}
+      toast('Auftrag zugeteilt', 'check'); drawPlan();
+    }
+  });
+})();
+
+async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRoute, routeColor, onPopupOpen, planMode }){
   document.getElementById('mapModalTitle').textContent = title;
+  document.getElementById('mapModal').classList.toggle('plan', !!planMode);
+  document.getElementById('mapSide').hidden = !planMode;
   const statusEl = document.getElementById('mapModalStatus');
   statusEl.textContent = 'Adressen werden geladen …';
   document.getElementById('mapModal').classList.add('open');
@@ -2708,6 +2933,13 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
   let missing = items.map((_,i)=>i).filter(i=>!res[i]);
   if(missing.length){ statusEl.textContent = `${missing.length} Adresse${missing.length>1?'n':''} werden erneut gesucht …`; done = items.length - missing.length; geoDown.admin = 0; geoDown.nomi = 0; await geoSleep(1200); await resolveAll(missing); }
 
+  if(planMode){
+    const keepSel = mapPlan && mapPlan.sel;
+    mapPlan = { items, res, sel: keepSel, fitted:false };
+    await drawPlan();
+    return;
+  }
+
   /* 2. Marker zeichnen – Aufträge an derselben Adresse werden nebeneinander gelegt,
         damit wirklich jeder Auftrag sichtbar und anklickbar ist */
   const points = [];
@@ -2739,13 +2971,14 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
       statusEl.textContent = `${points.length} Stopps auf der Karte · Route wird berechnet …`;
       const lineColor = routeColor || colorFn(items[0],0);
       let route = null;
-      try{ route = await fetchRoute(points); }catch(e){ route = null; }
+      try{ route = await fetchRouteLegs(points); }catch(e){ route = null; }
       if(route && route.coords && route.coords.length){
         /* Route "gecast" wie bei Google Maps: weisse Kontur + kräftige Farblinie obenauf,
            folgt den echten Strassen statt Luftlinien zwischen den Stopps zu ziehen. */
         L.polyline(route.coords, { color:'#ffffff', weight:7, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
         L.polyline(route.coords, { color:lineColor, weight:4.5, opacity:1, lineCap:'round', lineJoin:'round' }).addTo(tourMapLayer);
         boundsCoords = route.coords;
+        if(items.length<=15) addLegPills(tourMapLayer, route, lineColor);
         routeSummaryText = ` · Wegaufwand: ca. ${fmtDuration(route.durationMin)}, ${route.distanceKm.toFixed(1)} km`;
       } else {
         /* Routing nicht erreichbar - zumindest die Stopps in Reihenfolge verbinden */
@@ -2766,7 +2999,7 @@ async function showMapModal(title, items, { colorFn, labelFn, popupFn, connectRo
 async function openTourMap(tourId){
   const t = tours.find(x=>x.id===tourId);
   if(!t) return;
-  const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+  const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort(tourOrderCmp);
   if(items.length===0){ toast('Keine Adressen für diese Tour', 'warning'); return; }
   currentMapRefresh = ()=> openTourMap(tourId);
   await showMapModal(`${t.name} · ${items.length} Stopp${items.length>1?'s':''}`, items, {
@@ -2786,7 +3019,8 @@ async function openAllOrdersMap(){
   if(items.length===0){ toast('Keine Aufträge vorhanden', 'warning'); return; }
   currentMapRefresh = ()=> openAllOrdersMap();
   await showMapModal(`Alle Aufträge · ${items.length}`, items, {
-    connectRoute: true,
+    planMode: true,
+    connectRoute: false,
     routeColor: '#37474F',
     colorFn: (o)=>{ const t = tours.find(x=>x.id===o.assignedTourId); return t ? t.color : '#37474F'; },
     labelFn: (o,i,color)=> `<div style="box-sizing:border-box;background:${color};width:18px;height:18px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>`,
@@ -3340,7 +3574,7 @@ async function generateTourDispoPdf(opts){
   const byTour = {};
   orders.forEach(o=>{ if(o.assignedTourId && o.assignedTime) (byTour[o.assignedTourId] ||= []).push(o); });
   const activeTours = tours.filter(t=> (byTour[t.id]||[]).length);
-  activeTours.forEach(t=> byTour[t.id].sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime)));
+  activeTours.forEach(t=> byTour[t.id].sort(tourOrderCmp));
   const open = orders.filter(o=>!o.assignedTourId);
   const totalCount = orders.length;
 
@@ -3686,7 +3920,7 @@ function lvRender(){
   const W = DEPT==='uh' ? 'Leistungsverzeichnis' : 'Checkliste';
   const items = orders.filter(o=>o.assignedTourId).slice().sort((a,b)=>{
     const ta = (tours.find(t=>t.id===a.assignedTourId)||{}).name||'', tb = (tours.find(t=>t.id===b.assignedTourId)||{}).name||'';
-    return ta.localeCompare(tb) || timeToMin(a.assignedTime)-timeToMin(b.assignedTime);
+    return ta.localeCompare(tb) || tourOrderCmp(a,b);
   });
   const esc = s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   let nAuto=0,nCheck=0,nNone=0;
@@ -3844,7 +4078,7 @@ async function rappIsZeitblatt(fileIdx, pageNo){
 async function buildTourRapportePdf(tour){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   if(!lvSkip && lvLoadedDatum!==targetDatum){ try{ await lvPrepare(false); }catch(e){ console.warn(e); } }
-  const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+  const items = orders.filter(o=>o.assignedTourId===tour.id).slice().sort(tourOrderCmp);
   const out = await PDFDocument.create();
   const font = await out.embedFont(StandardFonts.HelveticaBold);
   const srcDocs = {}, lvDocs = {};
@@ -3943,7 +4177,7 @@ function renderTouren(){
   emptyEl.hidden=true;
 
   tours.forEach(t=>{
-    const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+    const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort(tourOrderCmp);
     const totalMin = items.reduce((s,o)=> s + jobDurationMinutes(o.aufwand, effTeam(t), o.isEinfuehrung), 0);
     const over8h = totalMin > 8*60;
     const card = document.createElement('div');
@@ -4033,7 +4267,7 @@ function renderTouren(){
   wrap.querySelectorAll('[data-route]').forEach(btn=> btn.addEventListener('click', ()=>{
     const t = tours.find(x=>x.id===btn.dataset.route);
     if(!t) return;
-    const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime));
+    const items = orders.filter(o=>o.assignedTourId===t.id).slice().sort(tourOrderCmp);
     const url = buildMapsRouteUrl(items);
     if(url) window.open(url, '_blank', 'noopener');
     else toast('Keine Adressen für diese Tour', 'warning');
@@ -4519,7 +4753,7 @@ async function generateFilledPdf(){
   const assigned = orders.filter(o=>o.assignedTourId && o.assignedTime);
   const byTour = {};
   assigned.forEach(o=>{ (byTour[o.assignedTourId] ||= []).push(o); });
-  Object.values(byTour).forEach(list=> list.sort((a,b)=> timeToMin(a.assignedTime)-timeToMin(b.assignedTime)));
+  Object.values(byTour).forEach(list=> list.sort(tourOrderCmp));
   const stopNumber = {};
   Object.values(byTour).forEach(list=> list.forEach((o,idx)=> stopNumber[o.auftragNr]=idx+1));
   const assignedByNr = {}; assigned.forEach(o=> assignedByNr[o.auftragNr]=o);
