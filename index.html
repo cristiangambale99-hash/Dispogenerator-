@@ -843,7 +843,6 @@ td .name{font-weight:600}
 .dnav svg{width:22px;height:22px;color:var(--cs-brand-text)}
 .dnav[aria-current="page"]{background:var(--cs-head);color:var(--cs-brand-text)}
 /* ===== KAPAZITÄT ===== */
-.dept-uh [data-go="kap"],.dept-uh [data-view="kap"]{display:none!important}
 .kap-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
 .kap-tab{border:1px solid var(--cs-line-strong);background:var(--cs-surface);color:var(--cs-brand-text);border-radius:8px;padding:8px 16px;font-weight:600;font-size:13.5px;cursor:pointer}
 .kap-tab.on{background:#1b8384;color:#fff;border-color:#1b8384}
@@ -1512,7 +1511,6 @@ function goView(name){
   closeDrawer();
   window.scrollTo(0,0);
   currentView = name;
-  if(name==='kap' && DEPT==='uh'){ goView('dash'); return; }
   if(name==='kap' && typeof renderKap==='function') renderKap();
 }
 document.querySelectorAll('[data-go]').forEach(el=> el.addEventListener('click', ()=> goView(el.dataset.go)));
@@ -5027,6 +5025,7 @@ function kapFmtDate(ymd){ const a = ymd.split('-'); return KAP_WD[kapDow(ymd)] +
 function kapEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function kapSeed(){
   const k = { v:1, migr:2, staff:[], cells:{}, notes:{}, sat:{ start:'', end:'', groups:{A:[],B:[]}, overrides:{} } };
+  if(DEPT === 'uh') k.staff = kapUhStaff();
   if(DEPT !== 'uh'){
     k.staff = [['lina','Lina'],['alba','Alba'],['ginett','Ginett'],['cristina','Cristina'],['yulisa','Yulisa Dayana Valdez Feliz'],['gabriela','Gabriela'],['lorena','Lorena'],['probe','Probedame']].map(a=>({id:a[0], name:a[1], probe:a[0]==='probe'}));
     kapFillStamm(k);
@@ -5041,9 +5040,15 @@ const KAP_STAMM = { lina:['44950',true,true,'50'], alba:['46773',true,true,'44']
 function kapFillStamm(k){
   (k.staff||[]).forEach(s=>{ const d = KAP_STAMM[s.id]; if(!d || s.probe) return; if(s.ma === undefined) s.ma = d[0]; if(s.pruef === undefined) s.pruef = d[1]; if(s.auto === undefined) s.auto = d[2]; if(s.fzg === undefined) s.fzg = d[3]; });
 }
+/* Unterhaltsreinigung: eigene Kapazitätstabelle mit eigenen Mitarbeitenden */
+function kapUhStaff(){
+  return [['rossana','46618','Rossana Maybelin Da Conceicao Vivas'],['dennis','47494','Dennis Tatiana Rivera Bohorquez'],['jorge','46083','Jorge Tadeo Erazo Cifuentes'],['johana','38280','Johana Elizabeth Aguilera Arias']]
+    .map(a=>({ id:a[0], name:a[2], ma:a[1], probe:false, pruef:false, auto:false, fzg:'' }));
+}
 function kapMigrate(k){
   // Einmalig: Nathalia, Erika und SPEZ gehören nicht mehr zum Springerteam
   if(!k) return false;
+  if(DEPT === 'uh' && !(k.staff||[]).length){ k.staff = kapUhStaff(); k.migr = 2; return true; }
   if(k.migr >= 2) return false;
   if(k.migr >= 1){ k.migr = 2; if(DEPT !== 'uh') kapFillStamm(k); return true; }
   k.migr = 2;
@@ -5071,7 +5076,7 @@ function kapSave(){
   cloudPushKap();
 }
 function cloudPushKap(){
-  if(DEPT !== 'pfs' || cloudApplying) return;
+  if(!DEPT || cloudApplying) return;
   clearTimeout(kapTimer);
   kapTimer = setTimeout(async ()=>{
     try{
@@ -5084,7 +5089,7 @@ function cloudPushKap(){
   }, 800);
 }
 async function kapCloudSync(){
-  if(DEPT !== 'pfs') return;
+  if(!DEPT) return;
   const rows = await sb(`dispo_settings?dept=eq.${DEPT}&key=eq.kapazitaet&select=value,updated_at`) || [];
   if(!rows.length){ if(!kapTimer) cloudPushKap(); return; }
   const st = cms(rows[0].updated_at);
