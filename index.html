@@ -857,7 +857,8 @@ td .name{font-weight:600}
 .kap-t th,.kap-t td{border:1px solid #e4eef1;text-align:center;padding:0;height:28px;min-width:0;font-size:11.5px;overflow:hidden}
 .kap-t th{font-weight:400;color:var(--cs-fg-2);height:38px;line-height:1.1;font-size:10px}
 .kap-t th b{color:var(--cs-fg);font-size:11px}
-.kap-t th.sa{background:#fff3e0}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
+.dept-uh .kap-leg-so{display:none}
+.kap-t th.sa{background:#fff3e0}.kap-t th.su{background:#fdecea}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
 .kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 6px;width:200px;min-width:0;max-width:none;background:#fff;font-size:12.5px;white-space:nowrap}
 .kap-t td.x,.kap-t th.x{background:#fff;padding:0 3px;min-width:0}
 .kap-t td.x0,.kap-t th.x0,.kap-t td.x1,.kap-t th.x1{width:48px;min-width:0;max-width:none}.kap-t td.x2,.kap-t th.x2{width:58px;min-width:0;max-width:none}.kap-t td.x3,.kap-t th.x3{width:76px;min-width:0;max-width:none}
@@ -1227,7 +1228,7 @@ body:not(.dept-none) #gate{display:none}
           </div>
           <div class="kap-selbar off" id="kapSelBar"><b id="kapSelInfo" style="color:#1b8384">Keine Felder markiert – mit der Maus über die Tabelle ziehen</b><span style="flex:1"></span><label style="font-size:13px">Stunden <input type="number" id="kapSelHrs" min="0" max="24" step="0.5" placeholder="z. B. 6.5"></label><button class="btn btn-p" data-selset="hrs" style="padding:7px 14px;min-height:0">Setzen</button><button class="btn btn-s" data-selset="8" style="padding:7px 12px;min-height:0">8</button><button class="btn btn-s" data-selset="4" style="padding:7px 12px;min-height:0">4</button><button class="btn btn-s" data-selset="0" style="padding:7px 12px;min-height:0">0 frei</button><button class="btn btn-s" data-selset="F" style="padding:7px 12px;min-height:0">Ferien</button><button class="btn btn-s" data-selset="x" style="padding:7px 12px;min-height:0">Leeren</button><button class="btn btn-s" data-selset="clear" style="padding:7px 12px;min-height:0">✕</button></div>
           <div class="card kap-wrap"><div id="kapTable"></div>
-            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Auto-Prüfung = Führerausweis vorhanden, Firmenauto = hat ein Geschäftsauto (dann Fahrzeugnummer). Tipp: Felder mit der Maus aufziehen (oder Umschalt + Klick), dann Stunden eintragen. Klick auf Namen = ganze Zeile, Klick auf Tag = ganze Spalte.</span></div>
+            <div class="kap-leg"><span><i style="background:#9ad3d3"></i>8 = ganzer Tag</span><span><i style="background:#bee2e9"></i>4 = halber Tag / Samstag</span><span><i style="background:#fff;border:1px solid #ccc"></i>0 = frei</span><span><i style="background:#f4b06a"></i>F = Ferien / Abwesend</span><span><i style="background:#fafcfc;border:1px solid #ccc"></i>nicht eingetragen</span><span class="kap-leg-so"><i style="background:#3c3c3b"></i>Sonntag</span><span id="kapHint">Auto-Prüfung = Führerausweis vorhanden, Firmenauto = hat ein Geschäftsauto (dann Fahrzeugnummer). Tipp: Felder mit der Maus aufziehen (oder Umschalt + Klick), dann Stunden eintragen. Klick auf Namen = ganze Zeile, Klick auf Tag = ganze Spalte.</span></div>
           </div>
         </div>
         <div id="kapSa" hidden></div>
@@ -5112,8 +5113,10 @@ function kapSatList(ymd){
   const g = (w % 2 === 0) ? 'A' : 'B';
   return { ids:(s.groups[g] || []), group:g };
 }
+/* Sonntag ist im PFS gesperrt, in der Unterhaltsreinigung ein normaler Arbeitstag */
+function kapSunBlock(ymd){ return DEPT !== 'uh' && kapDow(ymd) === 0; }
 function kapVal(id, ymd){
-  const dw = kapDow(ymd); if(dw === 0) return 'so';
+  const dw = kapDow(ymd); if(dw === 0 && DEPT !== 'uh') return 'so';
   const x = kap.cells[id+'|'+ymd]; if(x !== undefined) return x;
   if(dw === 6){
     const pl = kapSatList(ymd);
@@ -5125,7 +5128,7 @@ function kapNum(v){ const n = parseFloat(v); return (v==='F' || isNaN(n)) ? 0 : 
 function kapCls(v){ if(v==='') return 'e'; if(v==='F') return 'vF'; const n = kapNum(v); return n>=8 ? 'v8' : n>0 ? 'v4' : 'v0'; }
 function kapFmtH(n){ return (Math.round(n*100)/100).toString().replace('.',','); }
 function kapSet(id, ymd, v){
-  if(kapDow(ymd) === 0) return;
+  if(kapSunBlock(ymd)) return;
   const key = id+'|'+ymd;
   if(v === 'x') delete kap.cells[key]; else kap.cells[key] = v;
 }
@@ -5142,7 +5145,7 @@ function renderKap(){
   const mk = kapY+'-'+kapPad(kapM+1);
   const ymds = []; for(let d=1; d<=dim; d++) ymds.push(kapYmd(kapY,kapM,d));
   let h = '<table class="kap-t"><tr><th class="x x0" title="Autoprüfung (Führerausweis) vorhanden">Auto-<br>prüfung</th><th class="x x1" title="Hat ein Geschäftsauto">Firmen-<br>auto</th><th class="x x2">Fzg-Nr.</th><th class="x x3">MA-Nr.</th><th class="nm">Mitarbeiterin</th>';
-  ymds.forEach(y=>{ const w = kapDow(y); h += `<th class="${w===0?'so':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${w===0?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
+  ymds.forEach(y=>{ const w = kapDow(y); const sb = kapSunBlock(y); h += `<th class="${sb?'so':w===0?'su cl':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${sb?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
   h += '<th class="bm">Bemerkungen</th></tr>';
   const staff = kap.staff.filter(s=>!s.probe).concat(kap.staff.filter(s=>s.probe));
   kapRows = staff.map(s=>s.id);
@@ -5159,7 +5162,7 @@ function renderKap(){
   });
   h += '<tr class="sum"><td class="x x0"></td><td class="x x1"></td><td class="x x2"></td><td class="x x3"></td><td class="nm">Verfügbare Stunden (total)</td>';
   ymds.forEach(y=>{
-    if(kapDow(y) === 0){ h += '<td class="so"></td>'; return; }
+    if(kapSunBlock(y)){ h += '<td class="so"></td>'; return; }
     const c = kap.staff.reduce((a,s)=> a + kapNum(kapVal(s.id,y)), 0);
     h += `<td>${c?kapFmtH(c):'0'}</td>`;
   });
@@ -5213,7 +5216,7 @@ function kapSelCells(){
   if(!kapSel) return [];
   const r1 = Math.min(kapSel.r1,kapSel.r2), r2 = Math.max(kapSel.r1,kapSel.r2), c1 = Math.min(kapSel.c1,kapSel.c2), c2 = Math.max(kapSel.c1,kapSel.c2);
   const out = [];
-  for(let r=r1; r<=r2; r++) for(let c=c1; c<=c2; c++){ const y = kapYmd(kapY,kapM,c); if(kapDow(y)===0 || !kapRows[r]) continue; out.push({id:kapRows[r], d:y}); }
+  for(let r=r1; r<=r2; r++) for(let c=c1; c<=c2; c++){ const y = kapYmd(kapY,kapM,c); if(kapSunBlock(y) || !kapRows[r]) continue; out.push({id:kapRows[r], d:y}); }
   return out;
 }
 function kapApplySel(){
