@@ -858,7 +858,8 @@ td .name{font-weight:600}
 .kap-t th{font-weight:400;color:var(--cs-fg-2);height:38px;line-height:1.1;font-size:10px}
 .kap-t th b{color:var(--cs-fg);font-size:11px}
 .dept-uh .kap-leg-so{display:none}
-.kap-t th.sa{background:#fff3e0}.kap-t th.su{background:#fdecea}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
+.kap-t th.sa{background:#fff3e0}
+.kap-t .kap-sun{all:unset;cursor:pointer;color:#cfd8da;font-size:12px;font-weight:700;width:100%;height:100%;display:block;text-align:center}.kap-t .kap-sun:hover{color:#fff}.kap-t .kap-sun.lock{display:inline;width:auto;height:auto;color:#b8453c;font-size:9px;margin-right:2px}.kap-t th.su{background:#fdecea}.kap-t th.so,.kap-t td.so{background:#3c3c3b;border-color:#3c3c3b}
 .kap-t td.nm,.kap-t th.nm{text-align:left;padding:0 6px;width:200px;min-width:0;max-width:none;background:#fff;font-size:12.5px;white-space:nowrap}
 .kap-t td.x,.kap-t th.x{background:#fff;padding:0 3px;min-width:0}
 .kap-t td.x0,.kap-t th.x0,.kap-t td.x1,.kap-t th.x1{width:48px;min-width:0;max-width:none}.kap-t td.x2,.kap-t th.x2{width:58px;min-width:0;max-width:none}.kap-t td.x3,.kap-t th.x3{width:76px;min-width:0;max-width:none}
@@ -5114,9 +5115,9 @@ function kapSatList(ymd){
   return { ids:(s.groups[g] || []), group:g };
 }
 /* Sonntag ist im PFS gesperrt, in der Unterhaltsreinigung ein normaler Arbeitstag */
-function kapSunBlock(ymd){ return DEPT !== 'uh' && kapDow(ymd) === 0; }
+function kapSunBlock(ymd){ return DEPT !== 'uh' && kapDow(ymd) === 0 && !((kap && kap.sunOpen) || []).includes(ymd); }
 function kapVal(id, ymd){
-  const dw = kapDow(ymd); if(dw === 0 && DEPT !== 'uh') return 'so';
+  const dw = kapDow(ymd); if(kapSunBlock(ymd)) return 'so';
   const x = kap.cells[id+'|'+ymd]; if(x !== undefined) return x;
   if(dw === 6){
     const pl = kapSatList(ymd);
@@ -5145,7 +5146,7 @@ function renderKap(){
   const mk = kapY+'-'+kapPad(kapM+1);
   const ymds = []; for(let d=1; d<=dim; d++) ymds.push(kapYmd(kapY,kapM,d));
   let h = '<table class="kap-t"><tr><th class="x x0" title="Autoprüfung (Führerausweis) vorhanden">Auto-<br>prüfung</th><th class="x x1" title="Hat ein Geschäftsauto">Firmen-<br>auto</th><th class="x x2">Fzg-Nr.</th><th class="x x3">MA-Nr.</th><th class="nm">Mitarbeiterin</th>';
-  ymds.forEach(y=>{ const w = kapDow(y); const sb = kapSunBlock(y); h += `<th class="${sb?'so':w===0?'su cl':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${sb?'':KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
+  ymds.forEach(y=>{ const w = kapDow(y); const sb = kapSunBlock(y); h += sb ? `<th class="so"><button type="button" class="kap-sun" data-kapsun="${y}" title="Sonntag ${+y.slice(8)}. freigeben">+</button></th>` : `<th class="${w===0?'su cl':w===6?'sa cl':'cl'}" data-kapcol="${+y.slice(8)}">${w===0 && DEPT!=='uh' ? `<button type="button" class="kap-sun lock" data-kapsunlock="${y}" title="Sonntag wieder sperren">✕</button>` : ''}${KAP_WD[w]}<br><b>${+y.slice(8)}</b></th>`; });
   h += '<th class="bm">Bemerkungen</th></tr>';
   const staff = kap.staff.filter(s=>!s.probe).concat(kap.staff.filter(s=>s.probe));
   kapRows = staff.map(s=>s.id);
@@ -5296,6 +5297,14 @@ function kapApplyValue(v){
       if(k === 'clear'){ kapSel = null; kapApplySel(); return; }
       if(k === 'hrs'){ const inp = document.getElementById('kapSelHrs'); const n = parseFloat(String(inp.value).replace(',','.')); if(isNaN(n) || n<0 || n>24){ toast('Bitte 0 bis 24 Stunden eingeben'); return; } kapApplyValue(String(n)); inp.value=''; return; }
       kapApplyValue(k); return;
+    }
+    const sunB = t.closest('[data-kapsun],[data-kapsunlock]');
+    if(sunB){
+      const y = sunB.dataset.kapsun || sunB.dataset.kapsunlock;
+      kap.sunOpen = (kap.sunOpen || []).filter(d=>d!==y);
+      if(sunB.dataset.kapsun) kap.sunOpen.push(y);
+      else Object.keys(kap.cells).forEach(k=>{ if(k.endsWith('|'+y)) delete kap.cells[k]; });
+      kapSave(); renderKap(); toast(sunB.dataset.kapsun ? 'Sonntag freigegeben' : 'Sonntag wieder gesperrt'); return;
     }
     const colh = t.closest('[data-kapcol]');
     if(colh){ const c = +colh.dataset.kapcol; kapSel = { r1:0, c1:c, r2:kapRows.length-1, c2:c }; kapApplySel(); return; }
