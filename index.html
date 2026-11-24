@@ -4394,10 +4394,10 @@ function teamBlockHtml(o){
                 <tr><td style="padding:12px 0 0">
                   ${m.length>3 ? `<div style="color:#767676;font-size:11.5px;line-height:1.45;margin:0 0 8px">Bei Ihnen im Einsatz</div>
                   <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
-                    ${m.map(p=>`<td style="padding:0 6px 0 0;vertical-align:top;text-align:center;font-size:11.5px;color:#3C3C3B;font-weight:bold">${p.probe?'':pic(p)}<div style="padding-top:4px">${esc(p.name)}</div></td>`).join('')}
+                    ${m.map(p=>`<td style="padding:0 6px 0 0;vertical-align:top;text-align:center;font-size:11.5px;color:#3C3C3B;font-weight:bold">${pic(p)}<div style="padding-top:4px">${esc(p.name)}</div></td>`).join('')}
                   </tr></table>` : `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
-                    ${m.filter(p=>!p.probe).map(p=>`<td style="padding:0 4px 0 0;vertical-align:middle">${pic(p)}</td>`).join('')}
-                    <td style="padding:0 0 0 ${m.some(p=>!p.probe)?10:0}px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">${esc(names)}</div></td>
+                    ${m.map(p=>`<td style="padding:0 4px 0 0;vertical-align:middle">${pic(p)}</td>`).join('')}
+                    <td style="padding:0 0 0 10px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">${esc(names)}</div></td>
                   </tr></table>`}
                 </td></tr>`;
 }
