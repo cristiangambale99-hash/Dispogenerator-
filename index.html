@@ -4360,6 +4360,34 @@ function dayReference(datum){
   if(diff===0) return { word:'heute', prep:'heute', heading:'heute' };
   return { word:wd, prep:'am '+wd, heading:wd };
 }
+/* «Bei Ihnen im Einsatz»: Fotos und Vornamen der Mitarbeiterinnen der Tour in der Zeitmitteilung.
+   Fotos liegen unter /assets/team/<vorname>.jpg; ohne Foto erscheint ein Kreis mit dem Anfangsbuchstaben. */
+const TEAM_PHOTO_BASE = 'https://dispo-generator-css.vercel.app/assets/team/';
+const TEAM_PHOTOS = ['lina','alba','cristina','yulisa','ginett','gabriela'];
+function teamKey(n){ return String(n||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim().split(/\s+/)[0]; }
+function teamMembersFor(o){
+  const t = tours.find(x=>x.id===o.assignedTourId); if(!t) return [];
+  const known = new Set(TEAM_PHOTOS);
+  try{ ((kap && kap.staff) || []).forEach(s=>{ if(!s.probe) known.add(teamKey(s.name)); }); }catch(e){}
+  return String(t.name).split(/\s*(?:\+|,|&|\/|\bund\b)\s*/i).map(x=>x.trim()).filter(Boolean)
+    .filter(x=>known.has(teamKey(x))).map(x=>({ name: x.split(/\s+/)[0], key: teamKey(x) }));
+}
+function teamBlockHtml(o){
+  const m = teamMembersFor(o); if(!m.length) return '';
+  const esc = v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const pic = p=> TEAM_PHOTOS.includes(p.key)
+    ? `<img src="${TEAM_PHOTO_BASE}${p.key}.jpg" width="44" height="44" alt="${esc(p.name)}" style="display:block;width:44px;height:44px;border-radius:50%;border:2px solid #ffffff">`
+    : `<div style="width:44px;height:44px;line-height:44px;border-radius:50%;border:2px solid #ffffff;background:#71B6C6;color:#ffffff;font-weight:bold;font-size:15px;text-align:center">${esc(p.name[0].toUpperCase())}</div>`;
+  const names = m.length>1 ? m.slice(0,-1).map(p=>p.name).join(', ') + ' und ' + m[m.length-1].name : m[0].name;
+  return `
+                <tr><td style="padding:14px 0 0"><div style="border-top:1px solid #dde6e8;height:0;line-height:0;font-size:0">&nbsp;</div></td></tr>
+                <tr><td style="padding:12px 0 0">
+                  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
+                    ${m.map(p=>`<td style="padding:0 4px 0 0;vertical-align:middle">${pic(p)}</td>`).join('')}
+                    <td style="padding:0 0 0 10px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">${esc(names)}</div></td>
+                  </tr></table>
+                </td></tr>`;
+}
 function buildTimeNotificationEmail(o){
   const datumLong = formatDatumLong(targetDatum);
   const isUpdate = !!o.notifiedTourId;
@@ -4395,7 +4423,7 @@ function buildTimeNotificationEmail(o){
                 <tr><td style="padding:0 0 2px;color:#767676;font-size:11.5px;line-height:1.4">Uhrzeit</td></tr>
                 <tr><td style="padding:0 0 12px;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">ca. ${o.assignedTime} Uhr</td></tr>
                 <tr><td style="padding:0 0 2px;color:#767676;font-size:11.5px;line-height:1.4">Adresse</td></tr>
-                <tr><td style="padding:0;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">${o.address || '–'}</td></tr>
+                <tr><td style="padding:0;color:#3C3C3B;font-weight:bold;font-size:13px;line-height:1.4">${o.address || '–'}</td></tr>${teamBlockHtml(o)}
               </table>
             </td>
           </tr>
