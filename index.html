@@ -4369,13 +4369,27 @@ function teamMembersFor(o){
   const t = tours.find(x=>x.id===o.assignedTourId); if(!t) return [];
   const known = new Set(TEAM_PHOTOS);
   try{ ((kap && kap.staff) || []).forEach(s=>{ if(!s.probe) known.add(teamKey(s.name)); }); }catch(e){}
-  return String(t.name).split(/\s*(?:\+|,|&|\/|\bund\b)\s*/i).map(x=>x.trim()).filter(Boolean)
+  const list = String(t.name).split(/\s*(?:\+|,|&|\/|\bund\b)\s*/i).map(x=>x.trim()).filter(Boolean)
     .filter(x=>known.has(teamKey(x))).map(x=>({ name: x.split(/\s+/)[0], key: teamKey(x) }));
+  /* Probedame: nur Vorname, ohne Foto */
+  const pb = (typeof probes!=='undefined' && probes[t.id]) || null;
+  const pbName = pb && String(pb.name||'').trim().split(/\s+/)[0];
+  if(pbName) list.push({ name: pbName.charAt(0).toUpperCase()+pbName.slice(1), key: 'probe:'+teamKey(pbName), probe:true });
+  return list;
 }
+function isSpezTour(o){ const t = tours.find(x=>x.id===o.assignedTourId); return !!(t && /\bspez/i.test(t.name)); }
 function teamBlockHtml(o){
+  if(isSpezTour(o)) return `
+                <tr><td style="padding:14px 0 0"><div style="border-top:1px solid #dde6e8;height:0;line-height:0;font-size:0">&nbsp;</div></td></tr>
+                <tr><td style="padding:12px 0 0">
+                  <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
+                    <td style="padding:0;vertical-align:middle"><div style="width:62px;height:62px;line-height:62px;border-radius:50%;border:2px solid #ffffff;background:#2BB6B7;color:#ffffff;font-weight:bold;font-size:15px;text-align:center;letter-spacing:.04em">CS</div></td>
+                    <td style="padding:0 0 0 10px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">Unser Team der Spezialreinigung</div></td>
+                  </tr></table>
+                </td></tr>`;
   const m = teamMembersFor(o); if(!m.length) return '';
   const esc = v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const pic = p=> TEAM_PHOTOS.includes(p.key)
+  const pic = p=> (!p.probe && TEAM_PHOTOS.includes(p.key))
     ? `<img src="${TEAM_PHOTO_BASE}${p.key}.jpg" width="62" height="62" alt="${esc(p.name)}" style="display:block;width:62px;height:62px;border-radius:50%;border:2px solid #ffffff">`
     : `<div style="width:62px;height:62px;line-height:62px;border-radius:50%;border:2px solid #ffffff;background:#71B6C6;color:#ffffff;font-weight:bold;font-size:17px;text-align:center">${esc(p.name[0].toUpperCase())}</div>`;
   const names = m.length>1 ? m.slice(0,-1).map(p=>p.name).join(', ') + ' und ' + m[m.length-1].name : m[0].name;
@@ -4384,10 +4398,10 @@ function teamBlockHtml(o){
                 <tr><td style="padding:12px 0 0">
                   ${m.length>3 ? `<div style="color:#767676;font-size:11.5px;line-height:1.45;margin:0 0 8px">Bei Ihnen im Einsatz</div>
                   <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
-                    ${m.map(p=>`<td style="padding:0 6px 0 0;vertical-align:top;text-align:center;font-size:11.5px;color:#3C3C3B;font-weight:bold">${pic(p)}<div style="padding-top:4px">${esc(p.name)}</div></td>`).join('')}
+                    ${m.map(p=>`<td style="padding:0 6px 0 0;vertical-align:top;text-align:center;font-size:11.5px;color:#3C3C3B;font-weight:bold">${p.probe?'':pic(p)}<div style="padding-top:4px">${esc(p.name)}</div></td>`).join('')}
                   </tr></table>` : `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
-                    ${m.map(p=>`<td style="padding:0 4px 0 0;vertical-align:middle">${pic(p)}</td>`).join('')}
-                    <td style="padding:0 0 0 10px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">${esc(names)}</div></td>
+                    ${m.filter(p=>!p.probe).map(p=>`<td style="padding:0 4px 0 0;vertical-align:middle">${pic(p)}</td>`).join('')}
+                    <td style="padding:0 0 0 ${m.some(p=>!p.probe)?10:0}px;vertical-align:middle;line-height:1.45"><div style="color:#767676;font-size:11.5px">Bei Ihnen im Einsatz</div><div style="color:#3C3C3B;font-weight:bold;font-size:13px">${esc(names)}</div></td>
                   </tr></table>`}
                 </td></tr>`;
 }
